@@ -1,13 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Colors, Spacing, Typography, BorderRadius } from '../../config/theme';
+import { View, Text, StyleSheet } from 'react-native';
+import { Colors, Spacing, BorderRadius, Fonts } from '../../config/theme';
 import { Rating } from '../../types';
 import { RATINGS, RATING_LABELS } from '../../services/learningService';
+import { PressableScale, haptic } from '../common/Motion';
 
 export const RATING_COLORS: Record<Rating, { fg: string; bg: string }> = {
   excellent: { fg: Colors.success, bg: Colors.successLight },
   good: { fg: Colors.info, bg: Colors.infoLight },
-  needs_improvement: { fg: Colors.accent, bg: Colors.accentLight },
+  needs_improvement: { fg: Colors.warning, bg: Colors.warningLight },
   bad: { fg: Colors.danger, bg: Colors.dangerLight },
 };
 
@@ -26,25 +27,33 @@ interface RatingChipsProps {
 }
 
 export const RatingChips: React.FC<RatingChipsProps> = ({ value, onChange }) => (
-  <View style={styles.row}>
+  <View style={styles.row} accessibilityRole="radiogroup">
     {RATINGS.map((r) => {
       const active = value === r;
       const c = RATING_COLORS[r];
       return (
-        <TouchableOpacity
+        <PressableScale
           key={r}
+          pressedScale={0.93}
           style={[styles.chip, active && { backgroundColor: c.bg, borderColor: c.fg }]}
-          onPress={() => onChange(active ? null : r)}
-          activeOpacity={0.7}
+          onPress={() => {
+            haptic.select();
+            onChange(active ? null : r);
+          }}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: active }}
           accessibilityLabel={RATING_LABELS[r]}
         >
+          <View style={[styles.dot, { backgroundColor: c.fg }, !active && styles.dotIdle]} />
           <Text
-            style={[styles.text, active && { color: c.fg, fontWeight: '700' }]}
+            style={[styles.text, active && { color: c.fg, fontFamily: Fonts.bold }]}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
           >
             {SHORT_LABELS[r]}
           </Text>
-        </TouchableOpacity>
+        </PressableScale>
       );
     })}
   </View>
@@ -52,7 +61,8 @@ export const RatingChips: React.FC<RatingChipsProps> = ({ value, onChange }) => 
 
 export const RatingBadge: React.FC<{ rating: Rating }> = ({ rating }) => (
   <View style={[styles.badge, { backgroundColor: RATING_COLORS[rating].bg }]}>
-    <Text style={[styles.badgeText, { color: RATING_COLORS[rating].fg }]}>
+    <View style={[styles.badgeDot, { backgroundColor: RATING_COLORS[rating].fg }]} />
+    <Text style={[styles.badgeText, { color: RATING_COLORS[rating].fg }]} numberOfLines={1}>
       {RATING_LABELS[rating]}
     </Text>
   </View>
@@ -61,32 +71,52 @@ export const RatingBadge: React.FC<{ rating: Rating }> = ({ rating }) => (
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    gap: Spacing.xs,
+    gap: 6,
   },
   chip: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 2,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
+    justifyContent: 'center',
+    gap: 5,
+    height: 36,
+    paddingHorizontal: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
   },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: BorderRadius.full,
+  },
+  dotIdle: {
+    opacity: 0.45,
+  },
   text: {
-    ...Typography.caption,
+    fontFamily: Fonts.semibold,
     fontSize: 12,
-    fontWeight: '600',
     color: Colors.textSecondary,
+    flexShrink: 1,
   },
   badge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: Spacing.sm + 1,
+    paddingVertical: 3,
     borderRadius: BorderRadius.full,
     alignSelf: 'flex-start',
   },
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: BorderRadius.full,
+  },
   badgeText: {
-    ...Typography.caption,
-    fontWeight: '700',
+    fontFamily: Fonts.semibold,
+    fontSize: 11.5,
+    lineHeight: 15,
   },
 });

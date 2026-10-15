@@ -1,19 +1,31 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
-import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { LoadingScreen } from '../../components/common/LoadingScreen';
-import { Colors, Spacing, Typography, BorderRadius } from '../../config/theme';
+import { StatCard } from '../../components/common/StatCard';
+import { IconCircle } from '../../components/common/IconCircle';
+import { SectionHeader } from '../../components/common/SectionHeader';
+import { FadeInView, PressableScale } from '../../components/common/Motion';
+import {
+  Colors,
+  Spacing,
+  Typography,
+  BorderRadius,
+  Fonts,
+  Gradients,
+  Shadows,
+} from '../../config/theme';
 import { Group, Student } from '../../types';
 import { GroupService } from '../../services/groupService';
 import { getTodayDateString } from '../../utils/dateUtils';
 import { useFocusEffect } from 'expo-router';
 import { useAppNavigation, useAppRoute } from '../../navigation/appNavigation';
-
+import { avatarTone, initialsOf } from '../../utils/avatar';
 
 export const GroupDetailScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -46,26 +58,36 @@ export const GroupDetailScreen: React.FC = () => {
     }, [loadData])
   );
 
-  const renderStudentItem = ({ item }: { item: Student }) => (
-    <Card
-      style={styles.studentCard}
-      onPress={() => navigation.navigate('StudentProfile', { studentId: item.id })}
-    >
-      <View style={styles.studentRow}>
-        <View style={styles.avatarWrap}>
-          <Text style={styles.avatarText}>{item.fullName.charAt(0).toUpperCase()}</Text>
-        </View>
-        <View style={styles.studentInfo}>
-          <Text style={styles.studentName}>{item.fullName}</Text>
-          <Text style={styles.studentSub}>
-            {item.admissionNumber ? `Roll: ${item.admissionNumber} • ` : ''}
-            {item.contactPhone || 'No contact phone'}
-          </Text>
-        </View>
-        <Badge type={item.isActive ? 'active' : 'inactive'} size="sm" />
-      </View>
-    </Card>
-  );
+  const renderStudentItem = ({ item, index }: { item: Student; index: number }) => {
+    const tone = avatarTone(item.fullName);
+    return (
+      <FadeInView index={index}>
+        <Card
+          style={styles.studentCard}
+          onPress={() => navigation.navigate('StudentProfile', { studentId: item.id })}
+        >
+          <View style={styles.studentRow}>
+            <View style={[styles.avatarWrap, { backgroundColor: tone.bg }]}>
+              <Text style={[styles.avatarText, { color: tone.fg }]}>
+                {initialsOf(item.fullName)}
+              </Text>
+            </View>
+            <View style={styles.studentInfo}>
+              <Text style={styles.studentName} numberOfLines={1}>
+                {item.fullName}
+              </Text>
+              <Text style={styles.studentSub} numberOfLines={1}>
+                {item.admissionNumber ? `Roll: ${item.admissionNumber}  •  ` : ''}
+                {item.contactPhone || 'No contact phone'}
+              </Text>
+            </View>
+            <Badge type={item.isActive ? 'active' : 'inactive'} size="sm" />
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </View>
+        </Card>
+      </FadeInView>
+    );
+  };
 
   if (loading && !group) {
     return <LoadingScreen message="Loading group..." />;
@@ -108,58 +130,73 @@ export const GroupDetailScreen: React.FC = () => {
         ListHeaderComponent={
           <View style={styles.headerBlock}>
             {/* Group Overview Banner */}
-            <Card style={styles.overviewCard}>
+            <FadeInView style={styles.overviewCard}>
+              <LinearGradient
+                colors={Gradients.brand}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.heroGlow} />
               <View style={styles.overviewTop}>
-                <View style={styles.groupIconWrap}>
-                  <Ionicons name="layers" size={24} color={Colors.primary} />
-                </View>
+                <IconCircle
+                  icon="layers"
+                  size={52}
+                  square
+                  color={Colors.accent}
+                  bg={Colors.surface}
+                />
                 <View style={styles.overviewTextWrap}>
+                  <Text style={styles.heroOverline}>Group</Text>
                   <Text style={styles.groupTitle}>{group.name}</Text>
-                  {group.description ? (
-                    <Text style={styles.groupDescText}>{group.description}</Text>
-                  ) : null}
                 </View>
               </View>
-
-              <View style={styles.overviewStatsRow}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statVal}>{students.length}</Text>
-                  <Text style={styles.statLbl}>Active Students</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statBox}>
-                  <Text style={styles.statVal}>{group.sortOrder}</Text>
-                  <Text style={styles.statLbl}>Sort Order</Text>
-                </View>
-              </View>
+              {group.description ? (
+                <Text style={styles.groupDescText}>{group.description}</Text>
+              ) : null}
 
               {/* Action Buttons */}
               <View style={styles.actionsRow}>
-                <Button
-                  title="Attendance"
-                  icon="checkbox-outline"
+                <PressableScale
+                  style={[styles.heroActionBtn, styles.heroActionPrimary]}
                   onPress={() =>
                     navigation.navigate('DailyAttendance', { groupId: group.id, date: today })
                   }
-                  style={styles.actionBtn}
-                />
-                <Button
-                  title="Daily Sabak"
-                  variant="secondary"
-                  icon="book-outline"
+                  hapticOnPress
+                >
+                  <Ionicons name="checkbox-outline" size={18} color={Colors.primary} />
+                  <Text style={[styles.heroActionText, { color: Colors.primary }]}>Attendance</Text>
+                </PressableScale>
+                <PressableScale
+                  style={[styles.heroActionBtn, styles.heroActionGhost]}
                   onPress={() =>
                     navigation.navigate('DailyProgress', { groupId: group.id, date: today })
                   }
-                  style={styles.actionBtn}
-                />
+                  hapticOnPress
+                >
+                  <Ionicons name="book-outline" size={18} color={Colors.textInverse} />
+                  <Text style={styles.heroActionText}>Daily Sabak</Text>
+                </PressableScale>
               </View>
-            </Card>
+            </FadeInView>
 
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>
-                Enrolled Students ({students.length})
-              </Text>
-            </View>
+            {/* Stats */}
+            <FadeInView index={1} style={styles.overviewStatsRow}>
+              <StatCard title="Active Students" value={students.length} icon="people-outline" />
+              <StatCard
+                title="Sort Order"
+                value={group.sortOrder}
+                icon="reorder-four-outline"
+                color={Colors.accentDark}
+                bgColor={Colors.accentLight}
+              />
+            </FadeInView>
+
+            <SectionHeader
+              title="Enrolled Students"
+              meta={`(${students.length})`}
+              style={styles.sectionHeaderRow}
+            />
           </View>
         }
         ListEmptyComponent={
@@ -182,85 +219,89 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   listContent: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xxxl,
   },
   headerBlock: {
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.xs,
   },
   overviewCard: {
     marginBottom: Spacing.lg,
-    padding: Spacing.lg,
+    padding: Spacing.xl,
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+    backgroundColor: Colors.primary,
+    ...Shadows.lg,
+  },
+  heroGlow: {
+    position: 'absolute',
+    top: -70,
+    right: -50,
+    width: 200,
+    height: 200,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.accentGlow,
   },
   overviewTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  groupIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   overviewTextWrap: {
     flex: 1,
   },
+  heroOverline: {
+    ...Typography.overline,
+    color: 'rgba(255, 255, 255, 0.65)',
+  },
   groupTitle: {
-    ...Typography.titleMedium,
-    color: Colors.text,
+    ...Typography.titleLarge,
+    color: Colors.textInverse,
+    marginTop: 2,
   },
   groupDescText: {
-    ...Typography.bodySmall,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  overviewStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: Colors.border,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  statBox: {
-    alignItems: 'center',
-  },
-  statVal: {
-    ...Typography.titleMedium,
-    fontWeight: '800',
-    color: Colors.primary,
-  },
-  statLbl: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: Colors.border,
+    ...Typography.bodyMedium,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: Spacing.md,
   },
   actionsRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
+    marginTop: Spacing.lg,
   },
-  actionBtn: {
+  heroActionBtn: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 46,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  heroActionPrimary: {
+    backgroundColor: Colors.surface,
+  },
+  heroActionGhost: {
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+  },
+  heroActionText: {
+    ...Typography.button,
+    fontSize: 14,
+    color: Colors.textInverse,
+  },
+  overviewStatsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.xl,
   },
   sectionHeaderRow: {
-    marginBottom: Spacing.xs,
-  },
-  sectionTitle: {
-    ...Typography.titleSmall,
-    color: Colors.text,
+    marginBottom: Spacing.md,
   },
   studentCard: {
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
     padding: Spacing.md,
   },
   studentRow: {
@@ -269,29 +310,26 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   avatarWrap: {
-    width: 40,
-    height: 40,
+    width: 46,
+    height: 46,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    ...Typography.titleSmall,
-    color: Colors.primary,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
+    fontSize: 16,
+    letterSpacing: 0.3,
   },
   studentInfo: {
     flex: 1,
   },
   studentName: {
-    ...Typography.bodyLarge,
-    fontWeight: '600',
-    color: Colors.text,
+    ...Typography.titleSmall,
+    fontFamily: Fonts.bold,
   },
   studentSub: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+    ...Typography.bodySmall,
     marginTop: 2,
   },
 });

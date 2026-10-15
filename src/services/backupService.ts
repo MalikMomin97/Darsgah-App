@@ -65,6 +65,7 @@ export const BackupService = {
       studentBooks: 'student_books',
       lessonLog: 'lesson_log',
       attendanceRecords: 'attendance_records',
+      holidays: 'holidays',
     };
     const data: Record<string, unknown[]> = {};
     for (const [key, table] of Object.entries(tables)) {

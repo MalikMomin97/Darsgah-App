@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Colors, BorderRadius, Spacing } from '../../config/theme';
+import { Colors, BorderRadius, Spacing, Fonts } from '../../config/theme';
 import { AttendanceStatus, ChapterStatus } from '../../types';
 
 type BadgeType =
@@ -36,10 +36,6 @@ export const Badge: React.FC<BadgeProps> = ({
         return { label: label || 'Present', bg: Colors.presentBg, text: Colors.present };
       case 'absent':
         return { label: label || 'Absent', bg: Colors.absentBg, text: Colors.absent };
-      case 'late':
-        return { label: label || 'Late', bg: Colors.lateBg, text: Colors.late };
-      case 'excused':
-        return { label: label || 'Excused', bg: Colors.excusedBg, text: Colors.excused };
 
       // Progress
       case 'completed':
@@ -83,20 +79,13 @@ export const Badge: React.FC<BadgeProps> = ({
         {
           backgroundColor: config.bg,
           paddingVertical: isSmall ? 2 : 4,
-          paddingHorizontal: isSmall ? Spacing.xs + 2 : Spacing.sm,
+          paddingHorizontal: isSmall ? Spacing.sm - 1 : Spacing.sm + 2,
         },
         style,
       ]}
     >
-      <Text
-        style={[
-          styles.text,
-          {
-            color: config.text,
-            fontSize: isSmall ? 10 : 12,
-          },
-        ]}
-      >
+      <View style={[styles.dot, { backgroundColor: config.text }]} />
+      <Text style={[styles.text, { color: config.text, fontSize: isSmall ? 10.5 : 12 }]}>
         {config.label}
       </Text>
     </View>
@@ -106,12 +95,18 @@ export const Badge: React.FC<BadgeProps> = ({
 const styles = StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
-    borderRadius: BorderRadius.full,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+    borderRadius: BorderRadius.full,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   text: {
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     textTransform: 'capitalize',
   },
 });

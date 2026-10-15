@@ -1,20 +1,42 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { EmptyState } from '../../components/common/EmptyState';
 import { LoadingScreen } from '../../components/common/LoadingScreen';
-import { Colors, Spacing, Typography, BorderRadius } from '../../config/theme';
+import { Chip } from '../../components/common/Chip';
+import { IconCircle } from '../../components/common/IconCircle';
+import { FadeInView, PressableScale } from '../../components/common/Motion';
+import {
+  Colors,
+  Spacing,
+  Typography,
+  BorderRadius,
+  Fonts,
+  Shadows,
+  arabicAware,
+} from '../../config/theme';
 import { Book } from '../../types';
 import { BookService } from '../../services/bookService';
 import { useAppNavigation } from '../../navigation/appNavigation';
 
 export const BookListScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const [books, setBooks] = useState<Book[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -65,56 +87,89 @@ export const BookListScreen: React.FC = () => {
 
   const activeBooks = books.filter((b) => !b.isArchived);
 
-  const renderBook = ({ item }: { item: Book }) => {
+  const renderBook = ({ item, index: listIndex }: { item: Book; index: number }) => {
     const index = activeBooks.findIndex((b) => b.id === item.id);
+    const canMoveUp = index > 0;
+    const canMoveDown = index !== activeBooks.length - 1;
     return (
-      <Card
-        style={[styles.card, item.isArchived && styles.cardArchived]}
-        onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
-      >
-        <View style={styles.row}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="book-outline" size={22} color={Colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.meta}>
-              {item.chapterCount ?? 0} {item.chapterCount === 1 ? 'chapter' : 'chapters'}
-              {item.isArchived ? ' · removed' : ''}
-            </Text>
-            {item.nextBookTitle ? (
-              <Text style={styles.next}>Next: {item.nextBookTitle}</Text>
+      <FadeInView index={listIndex}>
+        <Card
+          style={[styles.card, item.isArchived && styles.cardArchived]}
+          padding="md"
+          onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
+        >
+          <View style={styles.row}>
+            <IconCircle
+              icon={item.isArchived ? 'archive-outline' : 'book'}
+              color={item.isArchived ? Colors.textMuted : Colors.primary}
+              bg={item.isArchived ? Colors.surfaceSubtle : Colors.primaryLight}
+              size={50}
+              square
+            />
+            <View style={styles.infoCol}>
+              <Text style={[styles.title, arabicAware(item.title, 16)]} numberOfLines={2}>
+                {item.title}
+              </Text>
+              <View style={styles.metaRow}>
+                <View style={styles.countPill}>
+                  <Ionicons name="layers-outline" size={12} color={Colors.textSecondary} />
+                  <Text style={styles.meta}>
+                    {item.chapterCount ?? 0} {item.chapterCount === 1 ? 'chapter' : 'chapters'}
+                  </Text>
+                </View>
+                {item.isArchived ? (
+                  <View style={[styles.countPill, styles.removedPill]}>
+                    <Text style={[styles.meta, { color: Colors.danger }]}>removed</Text>
+                  </View>
+                ) : null}
+              </View>
+              {item.nextBookTitle ? (
+                <View style={styles.nextRow}>
+                  <Ionicons name="arrow-forward-circle" size={14} color={Colors.accent} />
+                  <Text style={[styles.next, arabicAware(item.nextBookTitle, 12)]}>
+                    Next: {item.nextBookTitle}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            {!item.isArchived ? (
+              <View style={styles.reorderCol}>
+                <PressableScale
+                  style={[styles.iconBtn, !canMoveUp && styles.iconBtnDisabled]}
+                  disabled={!canMoveUp}
+                  onPress={() => handleMove(item.id, 'up')}
+                  pressedScale={0.88}
+                  hapticOnPress
+                  hitSlop={4}
+                  accessibilityLabel="Move up"
+                >
+                  <Ionicons
+                    name="chevron-up"
+                    size={16}
+                    color={canMoveUp ? Colors.textSecondary : Colors.border}
+                  />
+                </PressableScale>
+                <PressableScale
+                  style={[styles.iconBtn, !canMoveDown && styles.iconBtnDisabled]}
+                  disabled={!canMoveDown}
+                  onPress={() => handleMove(item.id, 'down')}
+                  pressedScale={0.88}
+                  hapticOnPress
+                  hitSlop={4}
+                  accessibilityLabel="Move down"
+                >
+                  <Ionicons
+                    name="chevron-down"
+                    size={16}
+                    color={canMoveDown ? Colors.textSecondary : Colors.border}
+                  />
+                </PressableScale>
+              </View>
             ) : null}
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
           </View>
-          {!item.isArchived ? (
-            <>
-              <TouchableOpacity
-                style={styles.iconBtn}
-                disabled={index <= 0}
-                onPress={() => handleMove(item.id, 'up')}
-              >
-                <Ionicons
-                  name="arrow-up"
-                  size={18}
-                  color={index <= 0 ? Colors.border : Colors.textSecondary}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.iconBtn}
-                disabled={index === activeBooks.length - 1}
-                onPress={() => handleMove(item.id, 'down')}
-              >
-                <Ionicons
-                  name="arrow-down"
-                  size={18}
-                  color={index === activeBooks.length - 1 ? Colors.border : Colors.textSecondary}
-                />
-              </TouchableOpacity>
-            </>
-          ) : null}
-          <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-        </View>
-      </Card>
+        </Card>
+      </FadeInView>
     );
   };
 
@@ -128,15 +183,13 @@ export const BookListScreen: React.FC = () => {
 
       <View style={styles.filterBar}>
         {[false, true].map((archived) => (
-          <TouchableOpacity
+          <Chip
             key={String(archived)}
-            style={[styles.chip, showArchived === archived && styles.chipActive]}
+            label={archived ? 'Include removed' : 'Active books'}
+            icon={archived ? 'archive-outline' : 'library-outline'}
+            selected={showArchived === archived}
             onPress={() => setShowArchived(archived)}
-          >
-            <Text style={[styles.chipText, showArchived === archived && styles.chipTextActive]}>
-              {archived ? 'Include removed' : 'Active books'}
-            </Text>
-          </TouchableOpacity>
+          />
         ))}
       </View>
 
@@ -148,6 +201,7 @@ export const BookListScreen: React.FC = () => {
           keyExtractor={(b) => b.id}
           renderItem={renderBook}
           contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <EmptyState
               icon="book-outline"
@@ -166,9 +220,19 @@ export const BookListScreen: React.FC = () => {
         animationType="fade"
         onRequestClose={() => setNewTitle(null)}
       >
-        <View style={styles.overlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add Book</Text>
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <FadeInView style={[styles.sheet, { paddingBottom: Spacing.xl + insets.bottom }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <IconCircle icon="book" color={Colors.primary} bg={Colors.primaryLight} size={48} />
+              <View style={styles.sheetHeaderText}>
+                <Text style={styles.modalTitle}>Add Book</Text>
+                <Text style={styles.modalSub}>You can add its chapters next.</Text>
+              </View>
+            </View>
             <Input
               label="Book name"
               required
@@ -182,12 +246,18 @@ export const BookListScreen: React.FC = () => {
                 title="Cancel"
                 variant="secondary"
                 onPress={() => setNewTitle(null)}
-                style={{ flex: 1 }}
+                style={styles.modalBtn}
               />
-              <Button title="Create" onPress={handleCreate} loading={saving} style={{ flex: 1 }} />
+              <Button
+                title="Create"
+                icon="add"
+                onPress={handleCreate}
+                loading={saving}
+                style={styles.modalBtn}
+              />
             </View>
-          </View>
-        </View>
+          </FadeInView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -201,86 +271,127 @@ const styles = StyleSheet.create({
   filterBar: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.md,
     gap: Spacing.sm,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  chip: {
-    paddingVertical: 6,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceSubtle,
-  },
-  chipActive: {
-    backgroundColor: Colors.primaryLight,
-  },
-  chipText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  chipTextActive: {
-    color: Colors.primary,
-    fontWeight: '700',
   },
   list: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xxxl,
     gap: Spacing.md,
   },
-  card: {
-    padding: Spacing.md,
-  },
+  card: {},
   cardArchived: {
-    opacity: 0.6,
+    opacity: 0.65,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+  infoCol: {
+    flex: 1,
   },
   title: {
     ...Typography.titleSmall,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 5,
+  },
+  countPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceSubtle,
+  },
+  removedPill: {
+    backgroundColor: Colors.dangerLight,
+  },
   meta: {
-    ...Typography.bodySmall,
+    ...Typography.caption,
+    fontFamily: Fonts.semibold,
+    color: Colors.textSecondary,
+  },
+  nextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
   },
   next: {
     ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '700',
-    marginTop: 2,
+    fontFamily: Fonts.bold,
+    color: Colors.accentDark,
+  },
+  reorderCol: {
+    gap: 4,
   },
   iconBtn: {
-    padding: 6,
+    width: 30,
+    height: 30,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  iconBtnDisabled: {
+    backgroundColor: Colors.surface,
+  },
+
+  // Add-book sheet
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.45)',
-    justifyContent: 'center',
-    padding: Spacing.xl,
+    backgroundColor: Colors.overlay,
+    justifyContent: 'flex-end',
   },
-  modalCard: {
+  sheet: {
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.xxl,
+    paddingTop: Spacing.md,
+    ...Shadows.lg,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: Colors.borderDark,
+    marginBottom: Spacing.xl,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  sheetHeaderText: {
+    flex: 1,
   },
   modalTitle: {
-    ...Typography.titleSmall,
-    marginBottom: Spacing.sm,
+    ...Typography.titleMedium,
+  },
+  modalSub: {
+    ...Typography.bodySmall,
+    marginTop: 1,
   },
   modalButtons: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  modalBtn: {
+    flex: 1,
   },
 });

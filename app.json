@@ -14,7 +14,7 @@
     "android": {
       "package": "com.darsgah.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0E5C4A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -35,6 +35,7 @@
         "projectId": "e5a4f038-3f2e-4809-8217-eaefdd33c1f0"
       }
     },
-    "owner": "malikmomin"
+    "owner": "malikmomin",
+    "backgroundColor": "#F6F4EF"
   }
 }

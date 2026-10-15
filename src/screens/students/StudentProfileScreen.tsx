@@ -4,19 +4,34 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
   Modal,
   FlatList,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
+import { StatCard } from '../../components/common/StatCard';
+import { IconCircle } from '../../components/common/IconCircle';
+import { SectionHeader } from '../../components/common/SectionHeader';
+import { EmptyState } from '../../components/common/EmptyState';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { LoadingScreen } from '../../components/common/LoadingScreen';
-import { Colors, Spacing, Typography, BorderRadius } from '../../config/theme';
+import { FadeInView, PressableScale, haptic } from '../../components/common/Motion';
+import {
+  Colors,
+  Spacing,
+  Typography,
+  BorderRadius,
+  Fonts,
+  Gradients,
+  Shadows,
+} from '../../config/theme';
 import { Student, StudentGroupHistory, Group, StudentBookProgress } from '../../types';
 import { StudentService } from '../../services/studentService';
 import { GroupService } from '../../services/groupService';
@@ -25,12 +40,13 @@ import { LearningOverviewCard } from '../../components/learning/LearningOverview
 import { formatDateDisplay } from '../../utils/dateUtils';
 import { useFocusEffect } from 'expo-router';
 import { useAppNavigation, useAppRoute } from '../../navigation/appNavigation';
-
+import { avatarTone, initialsOf } from '../../utils/avatar';
 
 export const StudentProfileScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const route = useAppRoute<'StudentProfile'>();
   const studentId = route.params.studentId;
+  const insets = useSafeAreaInsets();
 
   const [student, setStudent] = useState<Student | null>(null);
   const [history, setHistory] = useState<StudentGroupHistory[]>([]);
@@ -90,7 +106,10 @@ export const StudentProfileScreen: React.FC = () => {
         Alert.alert('Success', 'Student restored to active database.');
       } else {
         await StudentService.archiveStudent(student.id);
-        Alert.alert('Success', 'Student archived. All learning and attendance history is safely preserved.');
+        Alert.alert(
+          'Success',
+          'Student archived. All learning and attendance history is safely preserved.'
+        );
       }
       setArchiveModalVisible(false);
       navigation.goBack();
@@ -122,12 +141,75 @@ export const StudentProfileScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <Header title="Student Profile" onBack={() => navigation.goBack()} />
-        <View style={styles.notFoundWrap}>
-          <Text style={styles.notFoundText}>Student record not found.</Text>
+        <EmptyState
+          icon="person-outline"
+          title="Not Found"
+          description="Student record not found."
+          style={styles.notFoundWrap}
+        />
+        <View style={styles.notFoundAction}>
           <Button title="Go Back" onPress={() => navigation.goBack()} />
         </View>
       </View>
     );
+  }
+
+  const tone = avatarTone(student.fullName);
+  const chaptersDone = books.reduce((sum, b) => sum + b.completedCount, 0);
+
+  const infoRows: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    value: string;
+    color: string;
+    bg: string;
+  }[] = [
+    {
+      icon: 'people-outline',
+      label: 'Guardian / Father',
+      value: student.guardianName || 'Not specified',
+      color: Colors.primary,
+      bg: Colors.primaryLight,
+    },
+    {
+      icon: 'call-outline',
+      label: 'Phone Number',
+      value: student.contactPhone || 'Not specified',
+      color: Colors.info,
+      bg: Colors.infoLight,
+    },
+    {
+      icon: 'calendar-outline',
+      label: 'Date of Birth',
+      value: formatDateDisplay(student.dateOfBirth),
+      color: Colors.accentDark,
+      bg: Colors.accentLight,
+    },
+    {
+      icon: 'time-outline',
+      label: 'Registration Date',
+      value: formatDateDisplay(student.registrationDate),
+      color: Colors.success,
+      bg: Colors.successLight,
+    },
+  ];
+  if (student.address) {
+    infoRows.push({
+      icon: 'home-outline',
+      label: 'Address',
+      value: student.address,
+      color: Colors.holiday,
+      bg: Colors.holidayBg,
+    });
+  }
+  if (student.notes) {
+    infoRows.push({
+      icon: 'document-text-outline',
+      label: 'Notes / Remarks',
+      value: student.notes,
+      color: Colors.textSecondary,
+      bg: Colors.surfaceSubtle,
+    });
   }
 
   return (
@@ -144,187 +226,188 @@ export const StudentProfileScreen: React.FC = () => {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Profile Header Hero */}
-        <Card style={styles.heroCard}>
+        <FadeInView style={styles.heroCard}>
+          <LinearGradient
+            colors={Gradients.brand}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.heroGlow} />
+
           <View style={styles.heroTopRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarLetter}>
-                {student.fullName.charAt(0).toUpperCase()}
-              </Text>
+            <View style={styles.avatarRing}>
+              <View style={[styles.avatar, { backgroundColor: tone.bg }]}>
+                <Text style={[styles.avatarLetter, { color: tone.fg }]}>
+                  {initialsOf(student.fullName)}
+                </Text>
+              </View>
             </View>
 
             <View style={styles.heroInfo}>
-              <Text style={styles.studentName}>{student.fullName}</Text>
+              <Text style={styles.studentName} numberOfLines={2}>
+                {student.fullName}
+              </Text>
               <Text style={styles.admissionText}>
                 {student.admissionNumber ? `Roll No: ${student.admissionNumber}` : 'No Roll Number'}
               </Text>
-              <View style={styles.badgesRow}>
-                <Badge type={student.isArchived ? 'archived' : student.isActive ? 'active' : 'inactive'} />
-                {student.groupName ? (
-                  <View style={styles.groupBadge}>
-                    <Ionicons name="layers" size={12} color={Colors.primary} />
-                    <Text style={styles.groupBadgeText}>{student.groupName}</Text>
-                  </View>
-                ) : (
-                  <View style={[styles.groupBadge, { backgroundColor: Colors.surfaceSubtle }]}>
-                    <Text style={[styles.groupBadgeText, { color: Colors.textMuted }]}>No Group</Text>
-                  </View>
-                )}
-              </View>
             </View>
+          </View>
+
+          <View style={styles.badgesRow}>
+            <Badge
+              type={student.isArchived ? 'archived' : student.isActive ? 'active' : 'inactive'}
+            />
+            {student.groupName ? (
+              <View style={styles.heroChip}>
+                <Ionicons name="layers" size={12} color={Colors.textInverse} />
+                <Text style={styles.heroChipText}>{student.groupName}</Text>
+              </View>
+            ) : (
+              <View style={[styles.heroChip, styles.heroChipMuted]}>
+                <Text style={[styles.heroChipText, styles.heroChipTextMuted]}>No Group</Text>
+              </View>
+            )}
           </View>
 
           {/* Quick Academic Actions */}
           <View style={styles.actionButtonsRow}>
-            <TouchableOpacity
-              style={[styles.primaryActionBtn, { backgroundColor: Colors.primary }]}
+            <PressableScale
+              style={[styles.heroActionBtn, styles.heroActionPrimary]}
               onPress={() => navigation.navigate('StudentLearning', { studentId: student.id })}
+              hapticOnPress
             >
-              <Ionicons name="book-outline" size={18} color={Colors.textInverse} />
-              <Text style={styles.actionBtnText}>Learning</Text>
-            </TouchableOpacity>
+              <Ionicons name="book-outline" size={18} color={Colors.primary} />
+              <Text style={[styles.actionBtnText, { color: Colors.primary }]}>Learning</Text>
+            </PressableScale>
 
-            <TouchableOpacity
-              style={[styles.primaryActionBtn, { backgroundColor: Colors.info }]}
+            <PressableScale
+              style={[styles.heroActionBtn, styles.heroActionGhost]}
               onPress={() => navigation.navigate('AttendanceHistory', { studentId: student.id })}
+              hapticOnPress
             >
               <Ionicons name="calendar-outline" size={18} color={Colors.textInverse} />
               <Text style={styles.actionBtnText}>Attendance</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
-        </Card>
+        </FadeInView>
 
-        <LearningOverviewCard
-          books={books}
-          onOpen={() => navigation.navigate('StudentLearning', { studentId: student.id })}
-        />
+        {/* Stat Tiles */}
+        <FadeInView index={1} style={styles.statsRow}>
+          <StatCard title="Books" value={books.length} icon="library-outline" />
+          <StatCard
+            title="Chapters Done"
+            value={chaptersDone}
+            icon="checkmark-done-outline"
+            color={Colors.success}
+            bgColor={Colors.successLight}
+          />
+          <StatCard
+            title="Groups"
+            value={history.length}
+            icon="git-branch-outline"
+            color={Colors.accentDark}
+            bgColor={Colors.accentLight}
+          />
+        </FadeInView>
+
+        <FadeInView index={2}>
+          <LearningOverviewCard
+            books={books}
+            onOpen={() => navigation.navigate('StudentLearning', { studentId: student.id })}
+          />
+        </FadeInView>
 
         {/* Contact & Personal Information */}
-        <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Personal Information</Text>
-
-          <View style={styles.infoRow}>
-            <Ionicons name="people-outline" size={18} color={Colors.textSecondary} />
-            <View style={styles.infoTextCol}>
-              <Text style={styles.infoLabel}>Guardian / Father</Text>
-              <Text style={styles.infoValue}>{student.guardianName || 'Not specified'}</Text>
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Ionicons name="call-outline" size={18} color={Colors.textSecondary} />
-            <View style={styles.infoTextCol}>
-              <Text style={styles.infoLabel}>Phone Number</Text>
-              <Text style={styles.infoValue}>{student.contactPhone || 'Not specified'}</Text>
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Ionicons name="calendar-outline" size={18} color={Colors.textSecondary} />
-            <View style={styles.infoTextCol}>
-              <Text style={styles.infoLabel}>Date of Birth</Text>
-              <Text style={styles.infoValue}>{formatDateDisplay(student.dateOfBirth)}</Text>
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
-            <View style={styles.infoTextCol}>
-              <Text style={styles.infoLabel}>Registration Date</Text>
-              <Text style={styles.infoValue}>{formatDateDisplay(student.registrationDate)}</Text>
-            </View>
-          </View>
-
-          {student.address ? (
-            <View style={styles.infoRow}>
-              <Ionicons name="home-outline" size={18} color={Colors.textSecondary} />
-              <View style={styles.infoTextCol}>
-                <Text style={styles.infoLabel}>Address</Text>
-                <Text style={styles.infoValue}>{student.address}</Text>
+        <FadeInView index={3}>
+          <SectionHeader title="Personal Information" style={styles.sectionHeader} />
+          <Card style={styles.card} padding="md">
+            {infoRows.map((row, index) => (
+              <View
+                key={row.label}
+                style={[styles.infoRow, index < infoRows.length - 1 && styles.infoRowDivider]}
+              >
+                <IconCircle icon={row.icon} size={38} square color={row.color} bg={row.bg} />
+                <View style={styles.infoTextCol}>
+                  <Text style={styles.infoLabel}>{row.label}</Text>
+                  <Text style={styles.infoValue}>{row.value}</Text>
+                </View>
               </View>
-            </View>
-          ) : null}
-
-          {student.notes ? (
-            <View style={styles.infoRow}>
-              <Ionicons name="document-text-outline" size={18} color={Colors.textSecondary} />
-              <View style={styles.infoTextCol}>
-                <Text style={styles.infoLabel}>Notes / Remarks</Text>
-                <Text style={styles.infoValue}>{student.notes}</Text>
-              </View>
-            </View>
-          ) : null}
-        </Card>
+            ))}
+          </Card>
+        </FadeInView>
 
         {/* Group Membership & Transfer */}
-        <Card style={styles.card}>
+        <FadeInView index={4}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle}>Group Membership History</Text>
-            <TouchableOpacity
+            <SectionHeader title="Group Membership History" style={styles.sectionHeaderInline} />
+            <PressableScale
               style={styles.transferLink}
               onPress={() => {
                 setSelectedNewGroupId(student.currentGroupId);
                 setTransferModalVisible(true);
               }}
+              pressedScale={0.94}
+              hapticOnPress
             >
-              <Ionicons name="swap-horizontal" size={16} color={Colors.primary} />
+              <Ionicons name="swap-horizontal" size={15} color={Colors.primary} />
               <Text style={styles.transferLinkText}>Transfer Group</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
 
-          {history.length === 0 ? (
-            <Text style={styles.emptyHistoryText}>No group history recorded yet.</Text>
-          ) : (
-            history.map((item, index) => (
-              <View key={item.id} style={styles.historyItem}>
-                <View style={styles.historyDotWrap}>
-                  <View
-                    style={[
-                      styles.historyDot,
-                      !item.leftDate && styles.historyDotActive,
-                    ]}
-                  />
-                  {index !== history.length - 1 && <View style={styles.historyLine} />}
-                </View>
-                <View style={styles.historyContent}>
-                  <View style={styles.historyTopRow}>
-                    <Text style={styles.historyGroupName}>{item.groupName}</Text>
-                    {!item.leftDate ? (
-                      <Badge label="Current" type="active" size="sm" />
-                    ) : null}
+          <Card style={styles.card}>
+            {history.length === 0 ? (
+              <Text style={styles.emptyHistoryText}>No group history recorded yet.</Text>
+            ) : (
+              history.map((item, index) => (
+                <View
+                  key={item.id}
+                  style={[styles.historyItem, index === history.length - 1 && styles.historyLast]}
+                >
+                  <View style={styles.historyDotWrap}>
+                    <View style={[styles.historyDot, !item.leftDate && styles.historyDotActive]} />
+                    {index !== history.length - 1 && <View style={styles.historyLine} />}
                   </View>
-                  <Text style={styles.historyDates}>
-                    {formatDateDisplay(item.joinedDate)} —{' '}
-                    {item.leftDate ? formatDateDisplay(item.leftDate) : 'Present'}
-                  </Text>
-                  {item.notes ? (
-                    <Text style={styles.historyNotes}>{item.notes}</Text>
-                  ) : null}
+                  <View style={styles.historyContent}>
+                    <View style={styles.historyTopRow}>
+                      <Text style={styles.historyGroupName}>{item.groupName}</Text>
+                      {!item.leftDate ? <Badge label="Current" type="active" size="sm" /> : null}
+                    </View>
+                    <Text style={styles.historyDates}>
+                      {formatDateDisplay(item.joinedDate)} —{' '}
+                      {item.leftDate ? formatDateDisplay(item.leftDate) : 'Present'}
+                    </Text>
+                    {item.notes ? <Text style={styles.historyNotes}>{item.notes}</Text> : null}
+                  </View>
                 </View>
-              </View>
-            ))
-          )}
-        </Card>
+              ))
+            )}
+          </Card>
+        </FadeInView>
 
         {/* Student Status & Archiving Controls */}
-        <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Status Controls</Text>
-          <View style={styles.controlButtons}>
-            <Button
-              title={student.isActive ? 'Mark as Inactive' : 'Mark as Active'}
-              variant="secondary"
-              icon={student.isActive ? 'pause-circle-outline' : 'play-circle-outline'}
-              onPress={handleToggleActive}
-              style={{ marginBottom: Spacing.sm }}
-            />
+        <FadeInView index={5}>
+          <SectionHeader title="Status Controls" style={styles.sectionHeader} />
+          <Card style={styles.card}>
+            <View style={styles.controlButtons}>
+              <Button
+                title={student.isActive ? 'Mark as Inactive' : 'Mark as Active'}
+                variant="secondary"
+                icon={student.isActive ? 'pause-circle-outline' : 'play-circle-outline'}
+                onPress={handleToggleActive}
+                fullWidth
+              />
 
-            <Button
-              title={student.isArchived ? 'Restore Student' : 'Archive Student'}
-              variant={student.isArchived ? 'outline' : 'danger'}
-              icon={student.isArchived ? 'refresh-outline' : 'archive-outline'}
-              onPress={() => setArchiveModalVisible(true)}
-            />
-          </View>
-        </Card>
+              <Button
+                title={student.isArchived ? 'Restore Student' : 'Archive Student'}
+                variant={student.isArchived ? 'outline' : 'danger'}
+                icon={student.isArchived ? 'refresh-outline' : 'archive-outline'}
+                onPress={() => setArchiveModalVisible(true)}
+                fullWidth
+              />
+            </View>
+          </Card>
+        </FadeInView>
       </ScrollView>
 
       {/* Transfer Group Modal */}
@@ -335,41 +418,60 @@ export const StudentProfileScreen: React.FC = () => {
         onRequestClose={() => setTransferModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setTransferModalVisible(false)} />
+          <View style={[styles.modalContent, { paddingBottom: Spacing.xl + insets.bottom }]}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Transfer Student to Group</Text>
-              <TouchableOpacity onPress={() => setTransferModalVisible(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
-              </TouchableOpacity>
+              <PressableScale
+                style={styles.modalClose}
+                onPress={() => setTransferModalVisible(false)}
+                pressedScale={0.9}
+                hitSlop={8}
+              >
+                <Ionicons name="close" size={20} color={Colors.text} />
+              </PressableScale>
             </View>
 
             <Text style={styles.transferPrompt}>
-              Select the new group for {student.fullName}. The transfer date and historical records will be automatically logged.
+              Select the new group for {student.fullName}. The transfer date and historical records
+              will be automatically logged.
             </Text>
 
             <FlatList
               data={groups}
               keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.groupList}
               renderItem={({ item }) => (
-                <TouchableOpacity
+                <PressableScale
                   style={[
                     styles.groupOption,
                     selectedNewGroupId === item.id && styles.groupOptionSelected,
                   ]}
-                  onPress={() => setSelectedNewGroupId(item.id)}
+                  onPress={() => {
+                    haptic.select();
+                    setSelectedNewGroupId(item.id);
+                  }}
+                  pressedScale={0.98}
                 >
-                  <Text
-                    style={[
-                      styles.groupOptionText,
-                      selectedNewGroupId === item.id && styles.groupOptionTextSelected,
-                    ]}
-                  >
-                    {item.name}
-                  </Text>
+                  <View style={styles.groupOptionLeft}>
+                    <IconCircle
+                      icon={selectedNewGroupId === item.id ? 'layers' : 'layers-outline'}
+                      size={36}
+                    />
+                    <Text
+                      style={[
+                        styles.groupOptionText,
+                        selectedNewGroupId === item.id && styles.groupOptionTextSelected,
+                      ]}
+                    >
+                      {item.name}
+                    </Text>
+                  </View>
                   {selectedNewGroupId === item.id ? (
-                    <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                    <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
                   ) : null}
-                </TouchableOpacity>
+                </PressableScale>
               )}
             />
 
@@ -417,94 +519,135 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: Spacing.lg,
+    paddingTop: Spacing.xs,
     paddingBottom: Spacing.xxxl,
   },
   notFoundWrap: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.xl,
   },
-  notFoundText: {
-    ...Typography.bodyLarge,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.md,
+  notFoundAction: {
+    alignItems: 'center',
+    paddingBottom: Spacing.xxxl,
   },
   heroCard: {
     marginBottom: Spacing.lg,
-    padding: Spacing.lg,
+    padding: Spacing.xl,
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+    backgroundColor: Colors.primary,
+    ...Shadows.lg,
+  },
+  heroGlow: {
+    position: 'absolute',
+    top: -70,
+    right: -50,
+    width: 200,
+    height: 200,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.accentGlow,
   },
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
+    gap: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  avatarRing: {
+    padding: 3,
+    borderRadius: BorderRadius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
   avatar: {
-    width: 60,
-    height: 60,
+    width: 72,
+    height: 72,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarLetter: {
     ...Typography.titleLarge,
-    color: Colors.primary,
-    fontWeight: '800',
+    fontFamily: Fonts.extrabold,
+    letterSpacing: 0.5,
   },
   heroInfo: {
     flex: 1,
   },
   studentName: {
-    ...Typography.titleMedium,
-    color: Colors.text,
+    ...Typography.titleLarge,
+    color: Colors.textInverse,
   },
   admissionText: {
     ...Typography.bodySmall,
-    color: Colors.textSecondary,
+    fontFamily: Fonts.medium,
+    color: 'rgba(255, 255, 255, 0.75)',
     marginTop: 2,
-    marginBottom: 4,
   },
   badgesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
-  groupBadge: {
+  heroChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 3,
     borderRadius: BorderRadius.full,
   },
-  groupBadgeText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '700',
+  heroChipMuted: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  heroChipText: {
+    fontFamily: Fonts.semibold,
+    fontSize: 12,
+    color: Colors.textInverse,
+  },
+  heroChipTextMuted: {
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   actionButtonsRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: Spacing.md,
   },
-  primaryActionBtn: {
+  heroActionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.sm + 2,
+    height: 46,
     borderRadius: BorderRadius.md,
-    gap: Spacing.xs,
+    gap: Spacing.sm,
+  },
+  heroActionPrimary: {
+    backgroundColor: Colors.surface,
+  },
+  heroActionGhost: {
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
   },
   actionBtnText: {
     ...Typography.button,
-    fontSize: 13,
+    fontSize: 14,
     color: Colors.textInverse,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  sectionHeader: {
+    marginTop: Spacing.md,
+  },
+  sectionHeaderInline: {
+    flex: 1,
+    marginBottom: 0,
   },
   card: {
     marginBottom: Spacing.lg,
@@ -513,40 +656,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: Spacing.md,
     marginBottom: Spacing.md,
-  },
-  cardTitle: {
-    ...Typography.titleSmall,
-    color: Colors.text,
-    marginBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   transferLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
+    height: 32,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryLight,
   },
   transferLinkText: {
-    ...Typography.caption,
+    fontFamily: Fonts.semibold,
+    fontSize: 12.5,
     color: Colors.primary,
-    fontWeight: '700',
   },
   infoRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: Spacing.md,
-    marginBottom: Spacing.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xs,
+  },
+  infoRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   infoTextCol: {
     flex: 1,
   },
   infoLabel: {
-    ...Typography.caption,
-    color: Colors.textMuted,
+    ...Typography.overline,
   },
   infoValue: {
     ...Typography.bodyMedium,
-    color: Colors.text,
-    marginTop: 2,
+    fontFamily: Fonts.semibold,
+    marginTop: 3,
   },
   emptyHistoryText: {
     ...Typography.bodySmall,
@@ -555,27 +703,34 @@ const styles = StyleSheet.create({
   historyItem: {
     flexDirection: 'row',
     gap: Spacing.md,
-    marginBottom: Spacing.md,
+    paddingBottom: Spacing.lg,
+  },
+  historyLast: {
+    paddingBottom: 0,
   },
   historyDotWrap: {
     alignItems: 'center',
     width: 16,
   },
   historyDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.borderDark,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.surface,
+    borderWidth: 2,
+    borderColor: Colors.borderDark,
     marginTop: 4,
   },
   historyDotActive: {
     backgroundColor: Colors.primary,
+    borderColor: Colors.primaryLight,
   },
   historyLine: {
     width: 2,
     flex: 1,
     backgroundColor: Colors.border,
     marginTop: 4,
+    marginBottom: -Spacing.lg + 4,
   },
   historyContent: {
     flex: 1,
@@ -584,71 +739,100 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.sm,
   },
   historyGroupName: {
     ...Typography.bodyMedium,
-    fontWeight: '700',
-    color: Colors.text,
+    fontFamily: Fonts.bold,
+    flexShrink: 1,
   },
   historyDates: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+    ...Typography.bodySmall,
     marginTop: 2,
   },
   historyNotes: {
     ...Typography.caption,
-    color: Colors.textMuted,
     marginTop: 2,
   },
   controlButtons: {
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    flex: 1,
   },
   modalContent: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    maxHeight: '70%',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    maxHeight: '75%',
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.borderDark,
+    marginBottom: Spacing.md,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.sm,
+    gap: Spacing.md,
   },
   modalTitle: {
     ...Typography.titleMedium,
-    color: Colors.text,
+    flex: 1,
+  },
+  modalClose: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   transferPrompt: {
     ...Typography.bodySmall,
-    color: Colors.textSecondary,
     marginBottom: Spacing.md,
+  },
+  groupList: {
+    gap: Spacing.xs,
   },
   groupOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
     paddingHorizontal: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   groupOptionSelected: {
-    backgroundColor: Colors.primaryLight,
-    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primarySoft,
+    borderColor: Colors.primaryLight,
+  },
+  groupOptionLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
   groupOptionText: {
     ...Typography.bodyLarge,
-    color: Colors.text,
+    fontFamily: Fonts.medium,
   },
   groupOptionTextSelected: {
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.primary,
   },
   modalActions: {

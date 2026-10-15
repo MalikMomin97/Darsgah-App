@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   ScrollView,
   Alert,
   KeyboardAvoidingView,
@@ -18,6 +17,8 @@ import { Header } from '../../components/common/Header';
 import { Button } from '../../components/common/Button';
 import { EmptyState } from '../../components/common/EmptyState';
 import { LoadingScreen } from '../../components/common/LoadingScreen';
+import { Chip } from '../../components/common/Chip';
+import { FadeInView, PressableScale, haptic } from '../../components/common/Motion';
 import { PickerModal } from '../../components/learning/PickerModal';
 import {
   BookRowDraft,
@@ -25,7 +26,7 @@ import {
   StudentDayDraft,
   buildStudentDayDraft,
 } from '../../components/learning/StudentDayCard';
-import { Colors, Spacing, Typography, BorderRadius } from '../../config/theme';
+import { Colors, Spacing, Typography, BorderRadius, Fonts, Shadows } from '../../config/theme';
 import { Group } from '../../types';
 import { GroupService } from '../../services/groupService';
 import { LearningService, LessonInput } from '../../services/learningService';
@@ -172,15 +173,13 @@ export const DailySabakScreen: React.FC = () => {
           studentId: d.day.student.id,
           upserts: d.rows
             .filter((r) => r.rating && r.chapterId)
-            .map(
-              (r): LessonInput => ({
-                bookId: r.bookId,
-                chapterId: r.chapterId!,
-                rating: r.rating!,
-                isCompleted: r.isCompleted,
-                remarks: r.remarks,
-              })
-            ),
+            .map((r): LessonInput => ({
+              bookId: r.bookId,
+              chapterId: r.chapterId!,
+              rating: r.rating!,
+              isCompleted: r.isCompleted,
+              remarks: r.remarks,
+            })),
           removeChapterIds: d.rows
             .filter(
               (r) => r.originalChapterId && (!r.rating || r.chapterId !== r.originalChapterId)
@@ -197,6 +196,9 @@ export const DailySabakScreen: React.FC = () => {
   };
 
   const recordedStudents = drafts.filter((d) => d.rows.some((r) => r.rating)).length;
+
+  const isToday = date === getTodayDateString();
+  const recordedPct = drafts.length > 0 ? Math.round((recordedStudents / drafts.length) * 100) : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -215,48 +217,70 @@ export const DailySabakScreen: React.FC = () => {
         }
       />
 
-      <View style={styles.dateBar}>
-        <TouchableOpacity
-          style={styles.dateBtn}
-          onPress={() => confirmDiscard(() => setDate((d) => shiftDateString(d, -1)))}
-        >
-          <Ionicons name="chevron-back" size={20} color={Colors.primary} />
-        </TouchableOpacity>
-        <Text style={styles.dateText}>{formatDateDisplay(date)}</Text>
-        <TouchableOpacity
-          style={styles.dateBtn}
-          onPress={() => confirmDiscard(() => setDate((d) => shiftDateString(d, 1)))}
-        >
-          <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <View style={styles.topArea}>
+        <View style={styles.dateBar}>
+          <PressableScale
+            style={styles.dateBtn}
+            pressedScale={0.9}
+            onPress={() => {
+              haptic.select();
+              confirmDiscard(() => setDate((d) => shiftDateString(d, -1)));
+            }}
+            accessibilityLabel="Previous day"
+          >
+            <Ionicons name="chevron-back" size={18} color={Colors.primary} />
+          </PressableScale>
+          <View style={styles.dateCenter}>
+            <Text style={[styles.dateOverline, isFuture && { color: Colors.warning }]}>
+              {isToday ? 'Today' : isFuture ? 'Upcoming' : 'Past day'}
+            </Text>
+            <View style={styles.dateRow}>
+              <Ionicons name="calendar" size={15} color={Colors.primary} />
+              <Text style={styles.dateText}>{formatDateDisplay(date)}</Text>
+            </View>
+          </View>
+          <PressableScale
+            style={styles.dateBtn}
+            pressedScale={0.9}
+            onPress={() => {
+              haptic.select();
+              confirmDiscard(() => setDate((d) => shiftDateString(d, 1)));
+            }}
+            accessibilityLabel="Next day"
+          >
+            <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+          </PressableScale>
+        </View>
 
-      {groups.length > 0 ? (
-        <View style={styles.groupBar}>
+        {groups.length > 0 ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.groupScroll}
+            style={styles.groupBar}
           >
             {groups.map((g) => {
               const active = g.id === groupId;
               return (
-                <TouchableOpacity
+                <Chip
                   key={g.id}
-                  style={[styles.groupChip, active && styles.groupChipActive]}
+                  label={g.name}
+                  icon={active ? 'people' : 'people-outline'}
+                  selected={active}
                   onPress={() => !active && confirmDiscard(() => setGroupId(g.id))}
-                >
-                  <Text style={[styles.groupChipText, active && styles.groupChipTextActive]}>
-                    {g.name}
-                  </Text>
-                </TouchableOpacity>
+                />
               );
             })}
           </ScrollView>
-        </View>
-      ) : null}
+        ) : null}
 
-      {isFuture ? <Text style={styles.futureWarning}>This date is in the future.</Text> : null}
+        {isFuture ? (
+          <View style={styles.futureWarning}>
+            <Ionicons name="alert-circle" size={16} color={Colors.warning} />
+            <Text style={styles.futureWarningText}>This date is in the future.</Text>
+          </View>
+        ) : null}
+      </View>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -276,6 +300,7 @@ export const DailySabakScreen: React.FC = () => {
             keyExtractor={(d) => d.day.student.id}
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <EmptyState
                 icon="person-add-outline"
@@ -283,29 +308,47 @@ export const DailySabakScreen: React.FC = () => {
                 description="This group has no active students."
               />
             }
-            renderItem={({ item }) => (
-              <StudentDayCard
-                draft={item}
-                onChangeRow={changeRow}
-                onPickChapter={(studentId, bookId) => setPicker({ studentId, bookId })}
-                onOpenLearning={openLearning}
-              />
+            renderItem={({ item, index }) => (
+              <FadeInView index={index}>
+                <StudentDayCard
+                  draft={item}
+                  onChangeRow={changeRow}
+                  onPickChapter={(studentId, bookId) => setPicker({ studentId, bookId })}
+                  onOpenLearning={openLearning}
+                />
+              </FadeInView>
             )}
           />
         )}
 
         {!loading && drafts.length > 0 ? (
           <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              Recorded {recordedStudents}/{drafts.length}
-              {hasUnsaved ? ' · unsaved changes' : ''}
-            </Text>
+            <View style={styles.footerInfo}>
+              <View style={styles.footerTextRow}>
+                <Text style={styles.footerText}>
+                  Recorded{' '}
+                  <Text style={styles.footerCount}>
+                    {recordedStudents}/{drafts.length}
+                  </Text>
+                </Text>
+                {hasUnsaved ? (
+                  <View style={styles.unsavedPill}>
+                    <View style={styles.unsavedDot} />
+                    <Text style={styles.unsavedText}>unsaved changes</Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.footerTrack}>
+                <View style={[styles.footerFill, { width: `${recordedPct}%` }]} />
+              </View>
+            </View>
             <Button
               title="Save"
               icon="save-outline"
               onPress={handleSave}
               loading={saving}
               disabled={!hasUnsaved}
+              style={styles.saveBtn}
             />
           </View>
         ) : null}
@@ -333,53 +376,74 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  topArea: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+    gap: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
   dateBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xs,
+    padding: Spacing.sm,
     backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.sm,
   },
   dateBtn: {
-    padding: Spacing.sm,
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dateOverline: {
+    ...Typography.overline,
+    fontSize: 10,
+    color: Colors.accentDark,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
   },
   dateText: {
     ...Typography.titleSmall,
+    fontFamily: Fonts.bold,
   },
   groupBar: {
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    marginHorizontal: -Spacing.lg,
+    flexGrow: 0,
   },
   groupScroll: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.sm,
     gap: Spacing.sm,
   },
-  groupChip: {
-    paddingVertical: 6,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceSubtle,
-  },
-  groupChipActive: {
-    backgroundColor: Colors.primary,
-  },
-  groupChipText: {
-    ...Typography.bodySmall,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  groupChipTextActive: {
-    color: Colors.textInverse,
-  },
   futureWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.warningLight,
+  },
+  futureWarningText: {
     ...Typography.bodySmall,
-    color: Colors.accent,
-    backgroundColor: Colors.accentLight,
-    textAlign: 'center',
-    paddingVertical: Spacing.xs,
+    fontFamily: Fonts.semibold,
+    color: Colors.accentDark,
   },
   list: {
     padding: Spacing.lg,
@@ -389,17 +453,67 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.lg,
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
     backgroundColor: Colors.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    ...Shadows.lg,
+  },
+  footerInfo: {
+    flex: 1,
+    gap: Spacing.sm,
+  },
+  footerTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
   },
   footerText: {
     ...Typography.bodySmall,
-    fontWeight: '600',
-    flex: 1,
+    fontFamily: Fonts.medium,
+  },
+  footerCount: {
+    fontFamily: Fonts.bold,
+    color: Colors.text,
+  },
+  unsavedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.accentLight,
+  },
+  unsavedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.accent,
+  },
+  unsavedText: {
+    fontFamily: Fonts.semibold,
+    fontSize: 10.5,
+    color: Colors.accentDark,
+  },
+  footerTrack: {
+    height: 5,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceSubtle,
+    overflow: 'hidden',
+  },
+  footerFill: {
+    height: 5,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.success,
+  },
+  saveBtn: {
+    minWidth: 112,
   },
 });

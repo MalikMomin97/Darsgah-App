@@ -1,4 +1,10 @@
-export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+export type AttendanceStatus = 'present' | 'absent';
+
+/** A day the whole darsgah is closed; no attendance is taken on it. */
+export interface Holiday {
+  date: string; // YYYY-MM-DD
+  reason: string | null;
+}
 
 export interface Group {
   id: string;
@@ -58,8 +64,6 @@ export interface AttendanceSummary {
   totalDays: number;
   present: number;
   absent: number;
-  late: number;
-  excused: number;
   percentage: number;
 }
 

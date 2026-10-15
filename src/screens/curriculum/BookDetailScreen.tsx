@@ -1,15 +1,37 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { EmptyState } from '../../components/common/EmptyState';
 import { LoadingScreen } from '../../components/common/LoadingScreen';
+import { IconCircle } from '../../components/common/IconCircle';
+import { SectionHeader } from '../../components/common/SectionHeader';
+import { FadeInView, PressableScale } from '../../components/common/Motion';
 import { PickerModal } from '../../components/learning/PickerModal';
-import { Colors, Spacing, Typography, BorderRadius } from '../../config/theme';
+import {
+  Colors,
+  Spacing,
+  Typography,
+  BorderRadius,
+  Fonts,
+  Shadows,
+  arabicAware,
+  isArabicText,
+} from '../../config/theme';
 import { Book, Chapter } from '../../types';
 import { BookService } from '../../services/bookService';
 import { useAppNavigation, useAppRoute } from '../../navigation/appNavigation';
@@ -23,6 +45,7 @@ type EditorState =
 
 export const BookDetailScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const { bookId } = useAppRoute<'BookDetail'>().params;
 
   const [book, setBook] = useState<Book | null>(null);
@@ -153,48 +176,102 @@ export const BookDetailScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <Header title="Book" onBack={navigation.goBack} />
-        <EmptyState icon="alert-circle-outline" title="Book not found" description="It may have been deleted." />
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Book not found"
+          description="It may have been deleted."
+        />
       </View>
     );
   }
 
+  const editorIcon =
+    editor?.kind === 'book'
+      ? 'create-outline'
+      : editor?.kind === 'addChapters'
+        ? 'list-outline'
+        : 'pencil-outline';
+
   const header = (
-    <View style={{ gap: Spacing.md }}>
-      <Card>
-        <View style={styles.rowBetween}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.bookTitle}>{book.title}</Text>
-            {book.description ? <Text style={styles.meta}>{book.description}</Text> : null}
+    <View style={styles.headerBlock}>
+      <FadeInView>
+        <Card padding="xl" elevation="md">
+          <View style={styles.bookTop}>
+            <IconCircle
+              icon={book.isArchived ? 'archive-outline' : 'book'}
+              color={book.isArchived ? Colors.textMuted : Colors.primary}
+              bg={book.isArchived ? Colors.surfaceSubtle : Colors.primaryLight}
+              size={56}
+              square
+            />
+            <View style={styles.bookTitleCol}>
+              <Text style={[styles.bookTitle, arabicAware(book.title, 19)]}>{book.title}</Text>
+              {book.description ? <Text style={styles.meta}>{book.description}</Text> : null}
+              <View style={styles.statRow}>
+                <View style={styles.statPill}>
+                  <Ionicons name="layers-outline" size={12} color={Colors.primary} />
+                  <Text style={styles.statText}>
+                    {chapters.length} {chapters.length === 1 ? 'chapter' : 'chapters'}
+                  </Text>
+                </View>
+                {book.isArchived ? (
+                  <View style={[styles.statPill, styles.removedPill]}>
+                    <Text style={[styles.statText, { color: Colors.danger }]}>Removed</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+            <PressableScale
+              onPress={() =>
+                setEditor({ kind: 'book', title: book.title, description: book.description || '' })
+              }
+              style={styles.editBtn}
+              pressedScale={0.9}
+              hapticOnPress
+              accessibilityLabel="Edit book"
+            >
+              <Ionicons name="create-outline" size={19} color={Colors.primary} />
+            </PressableScale>
           </View>
-          <TouchableOpacity
-            onPress={() =>
-              setEditor({ kind: 'book', title: book.title, description: book.description || '' })
-            }
-            style={styles.iconBtn}
+
+          <PressableScale
+            style={styles.nextRow}
+            onPress={() => setNextPickerVisible(true)}
+            pressedScale={0.98}
+            hapticOnPress
           >
-            <Ionicons name="create-outline" size={20} color={Colors.primary} />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity style={styles.nextRow} onPress={() => setNextPickerVisible(true)}>
-          <Ionicons name="arrow-forward-circle-outline" size={20} color={Colors.primary} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Next book after completion</Text>
-            <Text style={styles.nextValue}>{book.nextBookTitle || 'None'}</Text>
+            <IconCircle
+              icon="arrow-forward-circle-outline"
+              color={Colors.accentDark}
+              bg={Colors.surface}
+              size={36}
+            />
+            <View style={styles.nextTextCol}>
+              <Text style={styles.label}>Next book after completion</Text>
+              <Text style={[styles.nextValue, arabicAware(book.nextBookTitle, 14)]}>
+                {book.nextBookTitle || 'None'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-down" size={18} color={Colors.accentDark} />
+          </PressableScale>
+          <View style={styles.hintRow}>
+            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.hint}>
+              When a student completes every chapter, you can promote them to the next book.
+            </Text>
           </View>
-          <Ionicons name="chevron-down" size={18} color={Colors.textSecondary} />
-        </TouchableOpacity>
-        <Text style={styles.hint}>
-          When a student completes every chapter, you can promote them to the next book.
-        </Text>
-      </Card>
+        </Card>
+      </FadeInView>
 
-      <View style={styles.rowBetween}>
-        <Text style={styles.sectionLabel}>Chapters ({chapters.length})</Text>
-        <TouchableOpacity onPress={() => setEditor({ kind: 'addChapters', text: '' })}>
-          <Text style={styles.link}>+ Add chapters</Text>
-        </TouchableOpacity>
-      </View>
+      <FadeInView index={1}>
+        <SectionHeader
+          title="Chapters"
+          meta={`(${chapters.length})`}
+          actionLabel="Add chapters"
+          onAction={() => setEditor({ kind: 'addChapters', text: '' })}
+          style={styles.sectionHeader}
+        />
+      </FadeInView>
     </View>
   );
 
@@ -216,6 +293,7 @@ export const BookDetailScreen: React.FC = () => {
         data={chapters}
         keyExtractor={(c) => c.id}
         contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
         ListHeaderComponent={header}
         ListEmptyComponent={
           <EmptyState
@@ -226,35 +304,54 @@ export const BookDetailScreen: React.FC = () => {
             onActionPress={() => setEditor({ kind: 'addChapters', text: '' })}
           />
         }
-        renderItem={({ item, index }) => (
-          <Card padding="sm" style={styles.chapterCard}>
-            <View style={styles.row}>
-              <Text style={styles.index}>{index + 1}</Text>
-              <Text style={styles.chapterTitle}>{item.title}</Text>
-              <IconBtn
-                icon="arrow-up"
-                disabled={index === 0}
-                onPress={() => run(() => BookService.moveChapter(book.id, item.id, 'up'))}
-              />
-              <IconBtn
-                icon="arrow-down"
-                disabled={index === chapters.length - 1}
-                onPress={() => run(() => BookService.moveChapter(book.id, item.id, 'down'))}
-              />
-              <IconBtn
-                icon="create-outline"
-                onPress={() =>
-                  setEditor({ kind: 'renameChapter', chapterId: item.id, title: item.title })
-                }
-              />
-              <IconBtn
-                icon="trash-outline"
-                color={Colors.danger}
-                onPress={() => handleRemoveChapter(item)}
-              />
-            </View>
-          </Card>
-        )}
+        renderItem={({ item, index }) => {
+          const arabic = isArabicText(item.title);
+          return (
+            <FadeInView index={index + 2}>
+              <Card padding="sm" style={styles.chapterCard}>
+                <View style={styles.row}>
+                  <View style={styles.indexBadge}>
+                    <Text style={styles.index}>{index + 1}</Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.chapterTitle,
+                      arabicAware(item.title, 15),
+                      arabic && styles.chapterTitleArabic,
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {item.title}
+                  </Text>
+                  <View style={styles.actions}>
+                    <IconBtn
+                      icon="chevron-up"
+                      disabled={index === 0}
+                      onPress={() => run(() => BookService.moveChapter(book.id, item.id, 'up'))}
+                    />
+                    <IconBtn
+                      icon="chevron-down"
+                      disabled={index === chapters.length - 1}
+                      onPress={() => run(() => BookService.moveChapter(book.id, item.id, 'down'))}
+                    />
+                    <IconBtn
+                      icon="create-outline"
+                      onPress={() =>
+                        setEditor({ kind: 'renameChapter', chapterId: item.id, title: item.title })
+                      }
+                    />
+                    <IconBtn
+                      icon="trash-outline"
+                      color={Colors.danger}
+                      bg={Colors.dangerLight}
+                      onPress={() => handleRemoveChapter(item)}
+                    />
+                  </View>
+                </View>
+              </Card>
+            </FadeInView>
+          );
+        }}
       />
 
       <PickerModal
@@ -277,11 +374,36 @@ export const BookDetailScreen: React.FC = () => {
         animationType="fade"
         onRequestClose={() => setEditor(null)}
       >
-        <View style={styles.overlay}>
-          <View style={styles.modalCard}>
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <FadeInView style={[styles.sheet, { paddingBottom: Spacing.xl + insets.bottom }]}>
+            <View style={styles.sheetHandle} />
+            {editor ? (
+              <View style={styles.sheetHeader}>
+                <IconCircle
+                  icon={editorIcon}
+                  color={Colors.primary}
+                  bg={Colors.primaryLight}
+                  size={44}
+                />
+                <View style={styles.sheetHeaderText}>
+                  <Text style={styles.modalTitle}>
+                    {editor.kind === 'book'
+                      ? 'Edit Book'
+                      : editor.kind === 'addChapters'
+                        ? 'Add Chapters'
+                        : 'Rename Chapter'}
+                  </Text>
+                  <Text style={[styles.modalSub, arabicAware(book.title, 12)]} numberOfLines={1}>
+                    {book.title}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
             {editor?.kind === 'book' ? (
               <>
-                <Text style={styles.modalTitle}>Edit Book</Text>
                 <Input
                   label="Book name"
                   required
@@ -297,7 +419,6 @@ export const BookDetailScreen: React.FC = () => {
               </>
             ) : editor?.kind === 'addChapters' ? (
               <>
-                <Text style={styles.modalTitle}>Add Chapters</Text>
                 <Input
                   label="One chapter per line"
                   value={editor.text}
@@ -310,7 +431,6 @@ export const BookDetailScreen: React.FC = () => {
               </>
             ) : editor?.kind === 'renameChapter' ? (
               <>
-                <Text style={styles.modalTitle}>Rename Chapter</Text>
                 <Input
                   label="Chapter name"
                   required
@@ -325,12 +445,18 @@ export const BookDetailScreen: React.FC = () => {
                 title="Cancel"
                 variant="secondary"
                 onPress={() => setEditor(null)}
-                style={{ flex: 1 }}
+                style={styles.modalBtn}
               />
-              <Button title="Save" onPress={handleSaveEditor} loading={saving} style={{ flex: 1 }} />
+              <Button
+                title="Save"
+                icon="checkmark"
+                onPress={handleSaveEditor}
+                loading={saving}
+                style={styles.modalBtn}
+              />
             </View>
-          </View>
-        </View>
+          </FadeInView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -341,10 +467,18 @@ const IconBtn: React.FC<{
   onPress: () => void;
   disabled?: boolean;
   color?: string;
-}> = ({ icon, onPress, disabled, color = Colors.textSecondary }) => (
-  <TouchableOpacity onPress={onPress} disabled={disabled} style={styles.iconBtn}>
-    <Ionicons name={icon} size={18} color={disabled ? Colors.border : color} />
-  </TouchableOpacity>
+  bg?: string;
+}> = ({ icon, onPress, disabled, color = Colors.textSecondary, bg = Colors.surfaceRaised }) => (
+  <PressableScale
+    onPress={onPress}
+    disabled={disabled}
+    style={[styles.iconBtn, { backgroundColor: disabled ? Colors.surface : bg }]}
+    pressedScale={0.86}
+    hapticOnPress
+    hitSlop={3}
+  >
+    <Ionicons name={icon} size={16} color={disabled ? Colors.border : color} />
+  </PressableScale>
 );
 
 const styles = StyleSheet.create({
@@ -353,34 +487,83 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   list: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xxxl,
     gap: Spacing.sm,
+  },
+  headerBlock: {
+    gap: Spacing.xl,
+    marginBottom: Spacing.xs,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
-  rowBetween: {
+
+  // Book header card
+  bookTop: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
+  },
+  bookTitleCol: {
+    flex: 1,
   },
   bookTitle: {
     ...Typography.titleMedium,
   },
   meta: {
     ...Typography.bodySmall,
-    marginTop: 2,
+    marginTop: 3,
+  },
+  statRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: Spacing.sm,
+  },
+  statPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryLight,
+  },
+  removedPill: {
+    backgroundColor: Colors.dangerLight,
+  },
+  statText: {
+    ...Typography.caption,
+    fontFamily: Fonts.semibold,
+    color: Colors.primary,
+  },
+  editBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primarySoft,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   nextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.primaryLight,
+    gap: Spacing.md,
+    marginTop: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    paddingLeft: Spacing.sm,
+    paddingRight: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.accentLight,
+  },
+  nextTextCol: {
+    flex: 1,
   },
   label: {
     ...Typography.caption,
@@ -388,59 +571,109 @@ const styles = StyleSheet.create({
   },
   nextValue: {
     ...Typography.bodyMedium,
-    fontWeight: '700',
-    color: Colors.primary,
+    fontFamily: Fonts.bold,
+    color: Colors.accentDark,
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: Spacing.sm,
   },
   hint: {
     ...Typography.caption,
-    marginTop: Spacing.xs,
+    flex: 1,
   },
-  sectionLabel: {
-    ...Typography.caption,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  sectionHeader: {
+    marginBottom: Spacing.xs,
   },
-  link: {
-    ...Typography.bodySmall,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
+
+  // Chapter rows
   chapterCard: {
     paddingHorizontal: Spacing.md,
   },
+  indexBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   index: {
-    ...Typography.bodySmall,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
+    fontSize: 12,
     color: Colors.primary,
-    width: 26,
   },
   chapterTitle: {
     ...Typography.bodyLarge,
+    fontFamily: Fonts.semibold,
+    fontSize: 15,
     flex: 1,
+  },
+  chapterTitleArabic: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   iconBtn: {
-    padding: 6,
+    width: 30,
+    height: 30,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+
+  // Editor sheet
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.45)',
-    justifyContent: 'center',
-    padding: Spacing.xl,
+    backgroundColor: Colors.overlay,
+    justifyContent: 'flex-end',
   },
-  modalCard: {
+  sheet: {
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.xxl,
+    paddingTop: Spacing.md,
+    ...Shadows.lg,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: Colors.borderDark,
+    marginBottom: Spacing.xl,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  sheetHeaderText: {
+    flex: 1,
   },
   modalTitle: {
-    ...Typography.titleSmall,
-    marginBottom: Spacing.sm,
+    ...Typography.titleMedium,
+  },
+  modalSub: {
+    ...Typography.bodySmall,
+    marginTop: 1,
   },
   modalButtons: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  modalBtn: {
+    flex: 1,
   },
 });

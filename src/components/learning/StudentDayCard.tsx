@@ -1,11 +1,24 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Typography, BorderRadius, Shadows } from '../../config/theme';
+import {
+  Colors,
+  Spacing,
+  Typography,
+  BorderRadius,
+  Shadows,
+  Fonts,
+  arabicAware,
+  isArabicText,
+} from '../../config/theme';
 import { Rating } from '../../types';
 import { StudentLearningDay } from '../../services/learningService';
 import { formatDateDisplay } from '../../utils/dateUtils';
+import { Badge } from '../common/Badge';
+import { IconCircle } from '../common/IconCircle';
+import { PressableScale, haptic } from '../common/Motion';
 import { RatingBadge, RatingChips, RATING_COLORS } from './RatingChips';
+import { initialsOf } from '../../utils/avatar';
 
 /** Editable state of one book row for one student on the selected day. */
 export interface BookRowDraft {
@@ -66,20 +79,29 @@ export const StudentDayCard: React.FC<StudentDayCardProps> = ({
   return (
     <View style={[styles.card, collapsed && styles.cardMuted]}>
       <View style={styles.headerRow}>
-        <TouchableOpacity style={{ flex: 1 }} onPress={() => onOpenLearning(student.id)}>
-          <Text style={styles.name}>{student.fullName}</Text>
-          <Text style={styles.meta}>
-            {student.admissionNumber ? `#${student.admissionNumber} · ` : ''}
-            {books.length} {books.length === 1 ? 'book' : 'books'}
-          </Text>
-        </TouchableOpacity>
-        {attendance ? (
-          <View style={[styles.attBadge, isAbsent && styles.attBadgeAbsent]}>
-            <Text style={[styles.attText, isAbsent && { color: Colors.absent }]}>
-              {attendance.charAt(0).toUpperCase() + attendance.slice(1)}
+        <PressableScale
+          style={styles.identity}
+          pressedScale={0.98}
+          onPress={() => onOpenLearning(student.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Open learning for ${student.fullName}`}
+        >
+          <View style={[styles.avatar, isAbsent && styles.avatarAbsent]}>
+            <Text style={[styles.avatarText, isAbsent && { color: Colors.absent }]}>
+              {initialsOf(student.fullName)}
             </Text>
           </View>
-        ) : null}
+          <View style={styles.identityText}>
+            <Text style={styles.name} numberOfLines={1}>
+              {student.fullName}
+            </Text>
+            <Text style={styles.meta} numberOfLines={1}>
+              {student.admissionNumber ? `#${student.admissionNumber} · ` : ''}
+              {books.length} {books.length === 1 ? 'book' : 'books'}
+            </Text>
+          </View>
+        </PressableScale>
+        {attendance ? <Badge type={attendance} size="sm" /> : null}
         {recorded > 0 ? (
           <View style={styles.countBadge}>
             <Ionicons name="checkmark" size={12} color={Colors.textInverse} />
@@ -89,91 +111,171 @@ export const StudentDayCard: React.FC<StudentDayCardProps> = ({
       </View>
 
       {collapsed ? (
-        <TouchableOpacity onPress={() => setExpandedAbsent(true)}>
+        <PressableScale
+          style={styles.absentRow}
+          pressedScale={0.98}
+          onPress={() => {
+            haptic.tap();
+            setExpandedAbsent(true);
+          }}
+        >
+          <Ionicons name="moon-outline" size={15} color={Colors.textMuted} />
           <Text style={styles.absentLink}>Absent today · tap to record anyway</Text>
-        </TouchableOpacity>
+        </PressableScale>
       ) : books.length === 0 ? (
-        <TouchableOpacity style={styles.noBooks} onPress={() => onOpenLearning(student.id)}>
-          <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
+        <PressableScale
+          style={styles.noBooks}
+          pressedScale={0.98}
+          onPress={() => onOpenLearning(student.id)}
+        >
+          <Ionicons name="add-circle" size={20} color={Colors.primary} />
           <Text style={styles.link}>No books assigned · Assign books</Text>
-        </TouchableOpacity>
+        </PressableScale>
       ) : (
         books.map((p) => {
           const row = draft.rows.find((r) => r.bookId === p.book.id);
           if (!row) return null;
-          const chapter = p.chapters.find((c) => c.id === row.chapterId);
+          const chapterIndex = p.chapters.findIndex((c) => c.id === row.chapterId);
+          const chapter = chapterIndex >= 0 ? p.chapters[chapterIndex] : undefined;
           const allDone = p.chapters.length > 0 && p.completedCount === p.chapters.length;
+          // A book tracked as a whole (e.g. Qaida) has one chapter: nothing to choose.
+          const singleChapter = p.chapters.length === 1;
           const accent = row.rating ? RATING_COLORS[row.rating].fg : Colors.border;
-          const update = (patch: Partial<BookRowDraft>) => onChangeRow(student.id, p.book.id, patch);
+          const update = (patch: Partial<BookRowDraft>) =>
+            onChangeRow(student.id, p.book.id, patch);
+          const selectLabel = chapter
+            ? chapter.title
+            : allDone
+              ? 'All chapters completed'
+              : 'Choose chapter';
+          const arabic = !!chapter && isArabicText(chapter.title);
+          const notesVisible = notesOpen[p.book.id] || !!row.remarks;
 
           return (
             <View key={p.book.id} style={[styles.row, { borderLeftColor: accent }]}>
               <View style={styles.rowHeader}>
-                <Ionicons name="book-outline" size={16} color={Colors.primary} />
+                <IconCircle icon="book" size={30} square />
                 <Text style={styles.bookTitle} numberOfLines={1}>
                   {p.book.title}
                 </Text>
-                <Text style={styles.progress}>
-                  {p.completedCount}/{p.chapters.length}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setNotesOpen((n) => ({ ...n, [p.book.id]: !n[p.book.id] }))}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                <View style={styles.progressPill}>
+                  <Text style={styles.progress}>
+                    {p.completedCount}/{p.chapters.length}
+                  </Text>
+                </View>
+                <PressableScale
+                  style={[styles.noteBtn, notesVisible && styles.noteBtnActive]}
+                  pressedScale={0.88}
+                  onPress={() => {
+                    haptic.tap();
+                    setNotesOpen((n) => ({ ...n, [p.book.id]: !n[p.book.id] }));
+                  }}
+                  hitSlop={8}
+                  accessibilityLabel="Teacher remarks"
                 >
                   <Ionicons
                     name={row.remarks ? 'chatbox-ellipses' : 'chatbox-ellipses-outline'}
-                    size={18}
-                    color={Colors.textSecondary}
+                    size={16}
+                    color={notesVisible ? Colors.primary : Colors.textSecondary}
                   />
-                </TouchableOpacity>
+                </PressableScale>
               </View>
 
               {p.chapters.length === 0 ? (
                 <Text style={styles.hint}>No chapters in this book yet.</Text>
               ) : (
                 <>
-                  <TouchableOpacity
-                    style={styles.select}
-                    onPress={() => onPickChapter(student.id, p.book.id)}
-                  >
-                    <Text style={styles.selectText} numberOfLines={1}>
-                      {chapter ? chapter.title : allDone ? 'All chapters completed' : 'Choose chapter'}
-                    </Text>
-                    {chapter?.lastRating && !row.rating ? (
-                      <RatingBadge rating={chapter.lastRating} />
-                    ) : null}
-                    <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} />
-                  </TouchableOpacity>
+                  {singleChapter ? null : (
+                    <PressableScale
+                      style={[styles.select, chapter && styles.selectFilled]}
+                      pressedScale={0.98}
+                      onPress={() => {
+                        haptic.tap();
+                        onPickChapter(student.id, p.book.id);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Choose chapter"
+                    >
+                      {chapter ? (
+                        <View style={styles.chapterNum}>
+                          <Text style={styles.chapterNumText}>{chapterIndex + 1}</Text>
+                        </View>
+                      ) : (
+                        <Ionicons
+                          name={allDone ? 'trophy-outline' : 'list-outline'}
+                          size={17}
+                          color={allDone ? Colors.success : Colors.textMuted}
+                        />
+                      )}
+                      <Text
+                        style={[
+                          styles.selectText,
+                          !chapter && styles.selectPlaceholder,
+                          chapter ? arabicAware(chapter.title, 14) : null,
+                          arabic && styles.rtl,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {selectLabel}
+                      </Text>
+                      {chapter?.lastRating && !row.rating ? (
+                        <RatingBadge rating={chapter.lastRating} />
+                      ) : null}
+                      <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} />
+                    </PressableScale>
+                  )}
                   {chapter?.lastDate ? (
-                    <Text style={styles.hint}>Last rated {formatDateDisplay(chapter.lastDate)}</Text>
+                    <View style={styles.hintRow}>
+                      <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
+                      <Text style={styles.hint}>
+                        Last rated {formatDateDisplay(chapter.lastDate)}
+                      </Text>
+                    </View>
                   ) : null}
 
                   {allDone && !row.chapterId ? (
-                    <TouchableOpacity onPress={() => onOpenLearning(student.id)}>
-                      <Text style={styles.link}>
+                    <PressableScale
+                      style={styles.promote}
+                      pressedScale={0.97}
+                      hapticOnPress
+                      onPress={() => onOpenLearning(student.id)}
+                    >
+                      <Ionicons name="ribbon-outline" size={16} color={Colors.accentDark} />
+                      <Text style={styles.promoteText}>
                         {p.book.nextBookTitle
-                          ? `Promote to ${p.book.nextBookTitle} →`
-                          : 'Complete this book →'}
+                          ? `Promote to ${p.book.nextBookTitle}`
+                          : 'Complete this book'}
                       </Text>
-                    </TouchableOpacity>
+                      <Ionicons name="arrow-forward" size={15} color={Colors.accentDark} />
+                    </PressableScale>
                   ) : (
                     <>
-                      <TouchableOpacity
+                      <PressableScale
                         style={styles.checkRow}
-                        onPress={() => update({ isCompleted: !row.isCompleted })}
+                        pressedScale={0.98}
+                        onPress={() => {
+                          haptic.select();
+                          update({ isCompleted: !row.isCompleted });
+                        }}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: row.isCompleted }}
                       >
-                        <Ionicons
-                          name={row.isCompleted ? 'checkbox' : 'square-outline'}
-                          size={20}
-                          color={Colors.primary}
-                        />
-                        <Text style={styles.checkLabel}>Chapter completed</Text>
-                      </TouchableOpacity>
-                      {notesOpen[p.book.id] || row.remarks ? (
+                        <View style={[styles.checkbox, row.isCompleted && styles.checkboxOn]}>
+                          {row.isCompleted ? (
+                            <Ionicons name="checkmark" size={14} color={Colors.textInverse} />
+                          ) : null}
+                        </View>
+                        <Text style={[styles.checkLabel, row.isCompleted && styles.checkLabelOn]}>
+                          {singleChapter ? 'Book completed' : 'Chapter completed'}
+                        </Text>
+                      </PressableScale>
+                      {notesVisible ? (
                         <TextInput
                           style={styles.note}
                           placeholder="Teacher remarks (optional)"
                           placeholderTextColor={Colors.textMuted}
+                          selectionColor={Colors.primary}
+                          cursorColor={Colors.primary}
                           value={row.remarks}
                           onChangeText={(t) => update({ remarks: t })}
                           multiline
@@ -198,123 +300,244 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: Spacing.md,
+    padding: Spacing.lg,
+    gap: Spacing.md,
     ...Shadows.sm,
   },
   cardMuted: {
-    backgroundColor: Colors.surfaceSubtle,
+    backgroundColor: Colors.surfaceRaised,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    marginBottom: Spacing.xs,
+  },
+  identity: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarAbsent: {
+    backgroundColor: Colors.absentBg,
+  },
+  avatarText: {
+    fontFamily: Fonts.bold,
+    fontSize: 15,
+    color: Colors.primary,
+  },
+  identityText: {
+    flex: 1,
   },
   name: {
     ...Typography.titleSmall,
+    fontFamily: Fonts.bold,
   },
   meta: {
-    ...Typography.bodySmall,
-  },
-  attBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.presentBg,
-  },
-  attBadgeAbsent: {
-    backgroundColor: Colors.absentBg,
-  },
-  attText: {
     ...Typography.caption,
-    fontWeight: '700',
-    color: Colors.present,
+    marginTop: 1,
   },
   countBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
     backgroundColor: Colors.success,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: Spacing.sm,
+    height: 22,
     borderRadius: BorderRadius.full,
   },
   countText: {
-    ...Typography.caption,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
+    fontSize: 11.5,
     color: Colors.textInverse,
+  },
+  absentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surfaceSubtle,
   },
   absentLink: {
     ...Typography.bodySmall,
+    fontFamily: Fonts.medium,
     color: Colors.textSecondary,
-    fontStyle: 'italic',
   },
   noBooks: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
-    paddingVertical: Spacing.xs,
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: Colors.primaryMuted,
+    backgroundColor: Colors.primarySoft,
   },
   link: {
     ...Typography.bodySmall,
-    fontWeight: '700',
+    fontFamily: Fonts.semibold,
     color: Colors.primary,
   },
   row: {
     borderLeftWidth: 3,
-    paddingLeft: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    marginTop: Spacing.sm,
-    gap: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.md,
+    gap: Spacing.sm + 2,
   },
   rowHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
   bookTitle: {
     ...Typography.bodyMedium,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     flex: 1,
   },
+  progressPill: {
+    paddingHorizontal: Spacing.sm,
+    height: 22,
+    justifyContent: 'center',
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceSubtle,
+  },
   progress: {
-    ...Typography.caption,
-    marginRight: Spacing.sm,
+    fontFamily: Fonts.semibold,
+    fontSize: 11.5,
+    color: Colors.textSecondary,
+  },
+  noteBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceSubtle,
+  },
+  noteBtnActive: {
+    backgroundColor: Colors.primaryLight,
   },
   select: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
-    borderWidth: 1,
+    gap: Spacing.sm,
+    minHeight: 46,
+    borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 7,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  selectFilled: {
+    borderColor: Colors.primaryLight,
+  },
+  chapterNum: {
+    minWidth: 26,
+    height: 26,
+    paddingHorizontal: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chapterNumText: {
+    fontFamily: Fonts.bold,
+    fontSize: 11.5,
+    color: Colors.textInverse,
   },
   selectText: {
     ...Typography.bodyMedium,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     flex: 1,
+  },
+  selectPlaceholder: {
+    fontFamily: Fonts.medium,
+    color: Colors.textMuted,
+  },
+  rtl: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: -2,
   },
   hint: {
     ...Typography.caption,
   },
+  promote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.accentLight,
+  },
+  promoteText: {
+    ...Typography.bodySmall,
+    fontFamily: Fonts.bold,
+    color: Colors.accentDark,
+    flex: 1,
+  },
   checkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.sm,
+    alignSelf: 'flex-start',
     paddingVertical: 2,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: BorderRadius.xs,
+    borderWidth: 1.5,
+    borderColor: Colors.borderDark,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxOn: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   checkLabel: {
     ...Typography.bodySmall,
+    fontFamily: Fonts.medium,
     color: Colors.text,
+  },
+  checkLabelOn: {
+    fontFamily: Fonts.semibold,
+    color: Colors.primary,
   },
   note: {
     ...Typography.bodyMedium,
-    borderWidth: 1,
+    fontFamily: Fonts.medium,
+    borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: BorderRadius.sm,
-    padding: Spacing.sm,
-    minHeight: 40,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    minHeight: 46,
+    textAlignVertical: 'top',
   },
 });

@@ -20,6 +20,7 @@ export const ROUTE_PATHS: Record<RouteName, string> = {
   ReportPreview: '/report-preview',
   Settings: '/settings',
   BackupRestore: '/backup-restore',
+  About: '/about',
 };
 
 type ParamsArgs<K extends RouteName> = undefined extends RootStackParamList[K]

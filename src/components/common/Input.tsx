@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,10 @@ import {
   StyleSheet,
   TextInputProps,
   ViewStyle,
-  TouchableOpacity,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, BorderRadius, Typography } from '../../config/theme';
+import { Colors, Spacing, BorderRadius, Typography, Fonts } from '../../config/theme';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -22,6 +22,7 @@ interface InputProps extends TextInputProps {
   required?: boolean;
 }
 
+/** Text field with a label, soft fill, and an emerald focus ring. */
 export const Input: React.FC<InputProps> = ({
   label,
   error,
@@ -32,58 +33,67 @@ export const Input: React.FC<InputProps> = ({
   containerStyle,
   required = false,
   style,
+  onFocus,
+  onBlur,
   ...rest
 }) => {
+  const [focused, setFocused] = useState(false);
+  const iconColor = error ? Colors.danger : focused ? Colors.primary : Colors.textMuted;
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label ? (
         <View style={styles.labelRow}>
           <Text style={styles.label}>{label}</Text>
-          {required ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+          {required ? <Text style={styles.requiredAsterisk}>*</Text> : null}
         </View>
       ) : null}
 
       <View
         style={[
           styles.inputWrapper,
+          focused && styles.inputWrapperFocused,
           error ? styles.inputWrapperError : null,
           rest.multiline ? styles.multilineWrapper : null,
         ]}
       >
         {leftIcon ? (
-          <Ionicons
-            name={leftIcon}
-            size={20}
-            color={Colors.textSecondary}
-            style={styles.leftIcon}
-          />
+          <Ionicons name={leftIcon} size={19} color={iconColor} style={styles.leftIcon} />
         ) : null}
 
         <TextInput
-          style={[
-            styles.input,
-            leftIcon ? styles.inputWithLeftIcon : null,
-            rightIcon ? styles.inputWithRightIcon : null,
-            rest.multiline ? styles.multilineInput : null,
-            style,
-          ]}
+          style={[styles.input, rest.multiline ? styles.multilineInput : null, style]}
           placeholderTextColor={Colors.textMuted}
+          selectionColor={Colors.primary}
+          cursorColor={Colors.primary}
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
           {...rest}
         />
 
         {rightIcon ? (
-          <TouchableOpacity
+          <Pressable
             onPress={onRightIconPress}
             disabled={!onRightIconPress}
             style={styles.rightIcon}
+            hitSlop={8}
           >
-            <Ionicons name={rightIcon} size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
+            <Ionicons name={rightIcon} size={19} color={iconColor} />
+          </Pressable>
         ) : null}
       </View>
 
       {error ? (
-        <Text style={styles.errorText}>{error}</Text>
+        <View style={styles.messageRow}>
+          <Ionicons name="alert-circle" size={13} color={Colors.danger} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
       ) : helperText ? (
         <Text style={styles.helperText}>{helperText}</Text>
       ) : null}
@@ -93,71 +103,81 @@ export const Input: React.FC<InputProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.lg,
   },
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.xs,
+    marginBottom: 6,
+    gap: 3,
   },
   label: {
-    ...Typography.bodyMedium,
-    fontWeight: '600',
-    color: Colors.text,
+    fontFamily: Fonts.semibold,
+    fontSize: 13,
+    color: Colors.textSecondary,
   },
   requiredAsterisk: {
+    fontFamily: Fonts.bold,
+    fontSize: 13,
     color: Colors.danger,
-    fontWeight: '700',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1.5,
     borderColor: Colors.border,
     borderRadius: BorderRadius.md,
-    minHeight: 48,
-    paddingHorizontal: Spacing.md,
+    minHeight: 52,
+    paddingHorizontal: Spacing.md + 2,
+  },
+  inputWrapperFocused: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.surface,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
   },
   inputWrapperError: {
     borderColor: Colors.danger,
-    backgroundColor: '#FFF5F5',
+    backgroundColor: Colors.dangerTint,
   },
   multilineWrapper: {
     alignItems: 'flex-start',
     paddingVertical: Spacing.sm,
-    minHeight: 88,
+    minHeight: 96,
   },
   input: {
     flex: 1,
-    ...Typography.bodyLarge,
+    fontFamily: Fonts.medium,
+    fontSize: 15,
     color: Colors.text,
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
   },
   multilineInput: {
     textAlignVertical: 'top',
   },
   leftIcon: {
-    marginRight: Spacing.xs,
-  },
-  inputWithLeftIcon: {
-    paddingLeft: Spacing.xs,
+    marginRight: Spacing.sm,
   },
   rightIcon: {
-    marginLeft: Spacing.xs,
-    padding: Spacing.xs,
+    marginLeft: Spacing.sm,
+    padding: 2,
   },
-  inputWithRightIcon: {
-    paddingRight: Spacing.xs,
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
   },
   errorText: {
     ...Typography.caption,
     color: Colors.danger,
-    marginTop: 4,
   },
   helperText: {
     ...Typography.caption,
-    color: Colors.textMuted,
-    marginTop: 4,
+    marginTop: 6,
   },
 });

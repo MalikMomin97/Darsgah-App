@@ -1,53 +1,85 @@
+/**
+ * Darsgah design system — "Emerald & Gold".
+ * Deep emerald brand colour, warm gold accent, ivory canvas, ink text.
+ * Fonts are loaded in src/app/_layout.tsx; always style text through `Typography` or
+ * `Fonts` (never `fontWeight`: each weight is its own font family on Android).
+ */
+
 export const Colors = {
-  primary: '#0F5132', // Deep Islamic Forest Green
-  primaryLight: '#E8F5E9',
-  primaryDark: '#0A3622',
-  primaryMuted: '#2E7D32',
+  // Brand
+  primary: '#0E5C4A',
+  primaryDark: '#083D31',
+  primaryDeep: '#062A22',
+  primaryMuted: '#3E8C77',
+  primaryLight: '#E6F1ED',
+  primarySoft: '#F1F7F4',
 
-  accent: '#D97706', // Warm Amber / Ochre
-  accentLight: '#FEF3C7',
+  accent: '#B8862B', // Gold
+  accentDark: '#8C6420',
+  accentLight: '#F8EFDB',
+  accentGlow: 'rgba(212, 166, 69, 0.18)', // gold haze on emerald gradients
 
-  // Status colors
-  success: '#16A34A',
-  successLight: '#DCFCE7',
-  danger: '#DC2626',
-  dangerLight: '#FEE2E2',
-  warning: '#F59E0B',
-  warningLight: '#FEF3C7',
-  info: '#0284C7',
-  infoLight: '#E0F2FE',
+  // Status
+  success: '#1F9D6B',
+  successLight: '#E3F5EC',
+  danger: '#D64545',
+  dangerLight: '#FBE9E9',
+  dangerTint: '#FFF8F8', // input error fill
+  warning: '#D99A06',
+  warningLight: '#FDF3DA',
+  info: '#2F6FDB',
+  infoLight: '#E6EEFC',
 
-  // Neutral colors
-  background: '#F8FAFC',
+  // Neutrals (warm)
+  background: '#F6F4EF',
   surface: '#FFFFFF',
-  surfaceSubtle: '#F1F5F9',
-  border: '#E2E8F0',
-  borderDark: '#CBD5E1',
+  surfaceSubtle: '#F2EFE8',
+  surfaceRaised: '#FBFAF7',
+  border: '#EAE5DA',
+  borderDark: '#D9D1C2',
 
-  text: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
+  text: '#16211D',
+  textSecondary: '#5B6661',
+  textMuted: '#9AA29E',
   textInverse: '#FFFFFF',
 
-  // Attendance specific
-  present: '#16A34A',
-  presentBg: '#DCFCE7',
-  absent: '#DC2626',
-  absentBg: '#FEE2E2',
-  late: '#F59E0B',
-  lateBg: '#FEF3C7',
-  excused: '#6366F1',
-  excusedBg: '#EEF2FF',
+  overlay: 'rgba(6, 26, 21, 0.55)',
 
-  // Progress specific
-  notStarted: '#94A3B8',
-  notStartedBg: '#F1F5F9',
-  inProgress: '#0284C7',
-  inProgressBg: '#E0F2FE',
-  completed: '#16A34A',
-  completedBg: '#DCFCE7',
-  needsImprovement: '#E11D48',
-  needsImprovementBg: '#FFE4E6',
+  // Attendance
+  present: '#1F9D6B',
+  presentBg: '#E3F5EC',
+  absent: '#D64545',
+  absentBg: '#FBE9E9',
+  holiday: '#6A5AE0',
+  holidayBg: '#EEECFD',
+
+  // Progress
+  notStarted: '#9AA29E',
+  notStartedBg: '#F2EFE8',
+  inProgress: '#2F6FDB',
+  inProgressBg: '#E6EEFC',
+  completed: '#1F9D6B',
+  completedBg: '#E3F5EC',
+  needsImprovement: '#D6455F',
+  needsImprovementBg: '#FBE8EC',
+};
+
+/** Gradient stops for hero areas and primary buttons (expo-linear-gradient). */
+export const Gradients = {
+  brand: ['#0E5C4A', '#083D31'] as const,
+  brandDeep: ['#11705A', '#062A22'] as const,
+  gold: ['#D4A645', '#B8862B'] as const,
+};
+
+/** Font family per weight (Plus Jakarta Sans for UI, Amiri for Arabic text). */
+export const Fonts = {
+  regular: 'PlusJakartaSans_400Regular',
+  medium: 'PlusJakartaSans_500Medium',
+  semibold: 'PlusJakartaSans_600SemiBold',
+  bold: 'PlusJakartaSans_700Bold',
+  extrabold: 'PlusJakartaSans_800ExtraBold',
+  arabic: 'Amiri_400Regular',
+  arabicBold: 'Amiri_700Bold',
 };
 
 export const Spacing = {
@@ -61,84 +93,125 @@ export const Spacing = {
 };
 
 export const BorderRadius = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
+  xs: 6,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  xl: 28,
   full: 9999,
 };
 
 export const Typography = {
+  display: {
+    fontFamily: Fonts.extrabold,
+    fontSize: 30,
+    lineHeight: 38,
+    letterSpacing: -0.6,
+    color: Colors.text,
+  },
   titleLarge: {
+    fontFamily: Fonts.bold,
     fontSize: 24,
-    fontWeight: '700' as const,
-    lineHeight: 30,
+    lineHeight: 31,
+    letterSpacing: -0.4,
     color: Colors.text,
   },
   titleMedium: {
+    fontFamily: Fonts.bold,
     fontSize: 19,
-    fontWeight: '600' as const,
-    lineHeight: 25,
+    lineHeight: 26,
+    letterSpacing: -0.2,
     color: Colors.text,
   },
   titleSmall: {
+    fontFamily: Fonts.semibold,
     fontSize: 16,
-    fontWeight: '600' as const,
     lineHeight: 22,
     color: Colors.text,
   },
   bodyLarge: {
+    fontFamily: Fonts.regular,
     fontSize: 16,
-    fontWeight: '400' as const,
-    lineHeight: 22,
+    lineHeight: 23,
     color: Colors.text,
   },
   bodyMedium: {
+    fontFamily: Fonts.regular,
     fontSize: 14,
-    fontWeight: '400' as const,
     lineHeight: 20,
     color: Colors.text,
   },
   bodySmall: {
-    fontSize: 12,
-    fontWeight: '400' as const,
-    lineHeight: 16,
+    fontFamily: Fonts.regular,
+    fontSize: 12.5,
+    lineHeight: 17,
     color: Colors.textSecondary,
   },
   caption: {
+    fontFamily: Fonts.medium,
+    fontSize: 11.5,
+    lineHeight: 15,
+    color: Colors.textMuted,
+  },
+  /** Small uppercase section label. */
+  overline: {
+    fontFamily: Fonts.bold,
     fontSize: 11,
-    fontWeight: '500' as const,
     lineHeight: 14,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase' as const,
     color: Colors.textMuted,
   },
   button: {
+    fontFamily: Fonts.semibold,
     fontSize: 15,
-    fontWeight: '600' as const,
     lineHeight: 20,
+  },
+  /** Arabic names (surahs, paras); pair with a size from the surrounding style. */
+  arabic: {
+    fontFamily: Fonts.arabicBold,
+    fontSize: 19,
+    lineHeight: 30,
+    color: Colors.text,
   },
 };
 
+const shadowTint = '#0B2A22';
+
 export const Shadows = {
   sm: {
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: shadowTint,
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 6,
     elevation: 1,
   },
   md: {
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: shadowTint,
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowRadius: 14,
     elevation: 3,
   },
   lg: {
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: shadowTint,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    elevation: 8,
   },
 };
+
+const ARABIC_SCRIPT = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
+
+/** True when the text contains Arabic script (surah / para names). */
+export function isArabicText(text: string | null | undefined): boolean {
+  return !!text && ARABIC_SCRIPT.test(text);
+}
+
+/** Extra style for a title that may be Arabic: switches to the Arabic font at a matching size. */
+export function arabicAware(text: string | null | undefined, baseSize = 15) {
+  return isArabicText(text)
+    ? { fontFamily: Fonts.arabicBold, fontSize: baseSize + 4, lineHeight: (baseSize + 4) * 1.6 }
+    : null;
+}

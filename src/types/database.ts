@@ -54,7 +54,7 @@ export interface AttendanceRecordRow {
   date: string; // YYYY-MM-DD
   student_id: string;
   group_id: string;
-  status: string; // 'present' | 'absent' | 'late' | 'excused'
+  status: string; // 'present' | 'absent'
   notes: string | null;
   created_at: string;
   updated_at: string;

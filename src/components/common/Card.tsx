@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, TouchableOpacity, ViewStyle, StyleProp } from 'react-native';
+import { View, ViewStyle, StyleProp } from 'react-native';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../config/theme';
+import { PressableScale } from './Motion';
 
 interface CardProps {
   children: React.ReactNode;
@@ -10,6 +11,7 @@ interface CardProps {
   elevation?: keyof typeof Shadows;
 }
 
+/** White rounded surface with a hairline border and soft shadow; springs when tappable. */
 export const Card: React.FC<CardProps> = ({
   children,
   onPress,
@@ -28,13 +30,9 @@ export const Card: React.FC<CardProps> = ({
 
   if (onPress) {
     return (
-      <TouchableOpacity
-        style={[containerStyle, style]}
-        onPress={onPress}
-        activeOpacity={0.7}
-      >
+      <PressableScale style={[containerStyle, style]} onPress={onPress} pressedScale={0.985}>
         {children}
-      </TouchableOpacity>
+      </PressableScale>
     );
   }
 

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography, BorderRadius } from '../../config/theme';
 import { Button } from './Button';
+import { FadeInView } from './Motion';
 
 interface EmptyStateProps {
   icon?: keyof typeof Ionicons.glyphMap;
@@ -13,6 +14,7 @@ interface EmptyStateProps {
   style?: ViewStyle;
 }
 
+/** Friendly placeholder with a layered icon medallion and an optional call to action. */
 export const EmptyState: React.FC<EmptyStateProps> = ({
   icon = 'file-tray-outline',
   title,
@@ -22,9 +24,11 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   style,
 }) => {
   return (
-    <View style={[styles.container, style]}>
-      <View style={styles.iconCircle}>
-        <Ionicons name={icon} size={42} color={Colors.primary} />
+    <FadeInView style={[styles.container, style]}>
+      <View style={styles.halo}>
+        <View style={styles.iconCircle}>
+          <Ionicons name={icon} size={34} color={Colors.primary} />
+        </View>
       </View>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.description}>{description}</Text>
@@ -38,7 +42,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           style={styles.actionButton}
         />
       ) : null}
-    </View>
+    </FadeInView>
   );
 };
 
@@ -46,21 +50,28 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Spacing.xxl,
-    marginVertical: Spacing.lg,
+    paddingHorizontal: Spacing.xxl,
+    paddingVertical: Spacing.xxxl,
+  },
+  halo: {
+    width: 112,
+    height: 112,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xl,
   },
   iconCircle: {
-    width: 80,
-    height: 80,
+    width: 76,
+    height: 76,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.md,
   },
   title: {
-    ...Typography.titleSmall,
-    color: Colors.text,
+    ...Typography.titleMedium,
     textAlign: 'center',
     marginBottom: Spacing.xs,
   },
@@ -68,10 +79,10 @@ const styles = StyleSheet.create({
     ...Typography.bodyMedium,
     color: Colors.textSecondary,
     textAlign: 'center',
-    marginBottom: Spacing.lg,
-    maxWidth: 280,
+    marginBottom: Spacing.xl,
+    maxWidth: 290,
   },
   actionButton: {
-    marginTop: Spacing.xs,
+    minWidth: 180,
   },
 });

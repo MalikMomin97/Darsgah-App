@@ -1,18 +1,38 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import {
+  useFonts,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
+import { Amiri_400Regular, Amiri_700Bold } from '@expo-google-fonts/amiri';
 import { getDatabase } from '../db/database';
 import { LoadingScreen } from '../components/common/LoadingScreen';
 import { Button } from '../components/common/Button';
 import { Colors, Spacing, Typography } from '../config/theme';
 
 /**
- * Root layout: opens the local SQLite database (running migrations) before any screen renders.
+ * Root layout: loads the app fonts and opens the local SQLite database (running migrations)
+ * before any screen renders.
  */
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
+  // A font load failure falls back to system fonts rather than blocking the app
+  const [fontsLoaded, fontError] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+    Amiri_400Regular,
+    Amiri_700Bold,
+  });
 
   const initApp = useCallback(async () => {
     try {
@@ -32,6 +52,15 @@ export default function RootLayout() {
     setInitError(null);
     initApp();
   };
+
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={styles.fontGate}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <StatusBar style="dark" />
+      </View>
+    );
+  }
 
   if (initError) {
     return (
@@ -55,7 +84,13 @@ export default function RootLayout() {
 
   return (
     <>
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+          contentStyle: { backgroundColor: Colors.background },
+        }}
+      >
         <Stack.Screen name="(tabs)" />
       </Stack>
       <StatusBar style="dark" />
@@ -64,6 +99,12 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  fontGate: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.background,
+  },
   errorContainer: {
     flex: 1,
     backgroundColor: Colors.background,

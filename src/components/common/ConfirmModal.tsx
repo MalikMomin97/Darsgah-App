@@ -69,29 +69,28 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: Colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.xl,
   },
   modalCard: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 380,
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xxl,
     ...Shadows.lg,
   },
   title: {
-    ...Typography.titleSmall,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
+    ...Typography.titleMedium,
+    marginBottom: Spacing.sm,
   },
   message: {
     ...Typography.bodyMedium,
     color: Colors.textSecondary,
-    marginBottom: Spacing.xl,
-    lineHeight: 20,
+    marginBottom: Spacing.xxl,
+    lineHeight: 21,
   },
   buttonRow: {
     flexDirection: 'row',

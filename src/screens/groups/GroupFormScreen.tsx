@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '../../components/common/Header';
 import { ScreenContainer } from '../../components/layout/ScreenContainer';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
-import { Colors, Spacing, Typography } from '../../config/theme';
+import { SectionHeader } from '../../components/common/SectionHeader';
+import { IconCircle } from '../../components/common/IconCircle';
+import { FadeInView } from '../../components/common/Motion';
+import { Colors, Spacing, Typography, Shadows } from '../../config/theme';
 import { GroupService } from '../../services/groupService';
 import { useAppNavigation, useAppRoute } from '../../navigation/appNavigation';
 
@@ -15,6 +19,7 @@ export const GroupFormScreen: React.FC = () => {
   const route = useAppRoute<'GroupForm'>();
   const groupId = route.params?.groupId;
   const isEdit = Boolean(groupId);
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -105,68 +110,91 @@ export const GroupFormScreen: React.FC = () => {
     <View style={styles.container}>
       <Header
         title={isEdit ? 'Edit Group' : 'Create Group'}
+        subtitle={isEdit ? 'Update group details' : 'Organise students into a group'}
         onBack={() => navigation.goBack()}
       />
-      <ScreenContainer scrollable>
-        <Card style={styles.formCard}>
-          <Text style={styles.cardHeader}>Group Information</Text>
+      <ScreenContainer scrollable contentContainerStyle={styles.scrollContent}>
+        <FadeInView>
+          <Card style={styles.formCard}>
+            <View style={styles.sectionHead}>
+              <IconCircle icon="layers" size={36} square />
+              <SectionHeader title="Group Information" style={styles.sectionHeader} />
+            </View>
 
-          <Input
-            label="Group Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g., Group 1 (Beginners), Tajweed Batch A"
-            required
-            leftIcon="layers-outline"
-          />
+            <Input
+              label="Group Name"
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g., Group 1 (Beginners), Tajweed Batch A"
+              required
+              leftIcon="layers-outline"
+            />
 
-          <Input
-            label="Description / Purpose"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="e.g., Students studying introductory Noorani Qaida and Taharah"
-            multiline
-            numberOfLines={3}
-            leftIcon="document-text-outline"
-          />
+            <Input
+              label="Description / Purpose"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="e.g., Students studying introductory Noorani Qaida and Taharah"
+              multiline
+              numberOfLines={3}
+              leftIcon="document-text-outline"
+            />
 
-          <Input
-            label="Display Sort Order"
-            value={sortOrder}
-            onChangeText={setSortOrder}
-            placeholder="e.g., 1, 2, 3"
-            keyboardType="numeric"
-            helperText="Lower numbers appear first in lists and attendance screens."
-            leftIcon="reorder-four-outline"
-          />
-
-          <Button
-            title={isEdit ? 'Save Changes' : 'Create Group'}
-            onPress={handleSave}
-            loading={loading}
-            icon="checkmark-circle-outline"
-            style={{ marginTop: Spacing.sm }}
-          />
-        </Card>
-
-        {isEdit && (
-          <Card style={[styles.formCard, styles.archiveCard]}>
-            <Text style={styles.archiveTitle}>Group Status</Text>
-            <Text style={styles.archiveDesc}>
-              {isArchived
-                ? 'This group is currently archived. Students in this group remain in the database.'
-                : 'Archiving hides this group from daily active pickers while preserving all past attendance and learning records.'}
-            </Text>
-
-            <Button
-              title={isArchived ? 'Restore Active Group' : 'Archive Group'}
-              variant={isArchived ? 'outline' : 'danger'}
-              onPress={() => setArchiveModalVisible(true)}
-              icon={isArchived ? 'refresh-outline' : 'archive-outline'}
+            <Input
+              label="Display Sort Order"
+              value={sortOrder}
+              onChangeText={setSortOrder}
+              placeholder="e.g., 1, 2, 3"
+              keyboardType="numeric"
+              helperText="Lower numbers appear first in lists and attendance screens."
+              leftIcon="reorder-four-outline"
+              containerStyle={styles.lastInput}
             />
           </Card>
+        </FadeInView>
+
+        {isEdit && (
+          <FadeInView index={1}>
+            <Card style={[styles.formCard, styles.archiveCard]}>
+              <View style={styles.sectionHead}>
+                <IconCircle
+                  icon={isArchived ? 'refresh' : 'archive'}
+                  size={36}
+                  square
+                  color={isArchived ? Colors.primary : Colors.danger}
+                  bg={isArchived ? Colors.primaryLight : Colors.dangerLight}
+                />
+                <SectionHeader title="Group Status" style={styles.sectionHeader} />
+              </View>
+              <Text style={styles.archiveDesc}>
+                {isArchived
+                  ? 'This group is currently archived. Students in this group remain in the database.'
+                  : 'Archiving hides this group from daily active pickers while preserving all past attendance and learning records.'}
+              </Text>
+
+              <Button
+                title={isArchived ? 'Restore Active Group' : 'Archive Group'}
+                variant={isArchived ? 'outline' : 'danger'}
+                onPress={() => setArchiveModalVisible(true)}
+                icon={isArchived ? 'refresh-outline' : 'archive-outline'}
+                fullWidth
+              />
+            </Card>
+          </FadeInView>
         )}
       </ScreenContainer>
+
+      {/* Sticky Save Bar */}
+      <View style={[styles.footer, { paddingBottom: Spacing.md + insets.bottom }]}>
+        <Button
+          title={isEdit ? 'Save Changes' : 'Create Group'}
+          onPress={handleSave}
+          loading={loading}
+          icon="checkmark-circle-outline"
+          size="lg"
+          fullWidth
+        />
+      </View>
 
       <ConfirmModal
         visible={archiveModalVisible}
@@ -191,26 +219,41 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  scrollContent: {
+    paddingBottom: Spacing.xxxl,
+  },
   formCard: {
     marginBottom: Spacing.lg,
+    padding: Spacing.lg,
   },
-  cardHeader: {
-    ...Typography.titleSmall,
-    color: Colors.text,
-    marginBottom: Spacing.md,
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  sectionHeader: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  lastInput: {
+    marginBottom: 0,
   },
   archiveCard: {
     borderColor: Colors.borderDark,
   },
-  archiveTitle: {
-    ...Typography.titleSmall,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
-  },
   archiveDesc: {
     ...Typography.bodyMedium,
     color: Colors.textSecondary,
-    marginBottom: Spacing.md,
-    lineHeight: 20,
+    marginTop: -Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  footer: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    ...Shadows.lg,
   },
 });

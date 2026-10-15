@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Spacing, Typography } from '../../config/theme';
+import { Colors, Spacing, Typography, BorderRadius, Fonts } from '../../config/theme';
+import { PressableScale } from './Motion';
 
 interface HeaderProps {
   title: string;
@@ -19,6 +20,7 @@ interface HeaderProps {
   safeTop?: boolean;
 }
 
+/** Screen header: round back button, bold title with optional subtitle, pill action. */
 export const Header: React.FC<HeaderProps> = ({
   title,
   subtitle,
@@ -28,55 +30,50 @@ export const Header: React.FC<HeaderProps> = ({
   safeTop = true,
 }) => {
   const insets = useSafeAreaInsets();
+  const actionColor = rightAction?.color || Colors.primary;
+
   return (
     <View style={[styles.container, safeTop && { paddingTop: Spacing.md + insets.top }, style]}>
-      <View style={styles.leftContainer}>
-        {onBack ? (
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={onBack}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="chevron-back" size={24} color={Colors.text} />
-          </TouchableOpacity>
-        ) : null}
-        <View style={styles.titleContainer}>
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
+      {onBack ? (
+        <PressableScale
+          style={styles.backButton}
+          onPress={onBack}
+          pressedScale={0.9}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={22} color={Colors.text} />
+        </PressableScale>
+      ) : null}
+
+      <View style={styles.titleContainer}>
+        <Text style={[styles.title, !onBack && styles.titleRoot]} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {subtitle}
           </Text>
-          {subtitle ? (
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
+        ) : null}
       </View>
 
       {rightAction ? (
-        <TouchableOpacity
-          style={styles.rightButton}
+        <PressableScale
+          style={[styles.rightButton, !rightAction.label && styles.rightButtonIconOnly]}
           onPress={rightAction.onPress}
-          activeOpacity={0.7}
+          pressedScale={0.94}
+          hapticOnPress
         >
           {rightAction.icon ? (
-            <Ionicons
-              name={rightAction.icon}
-              size={22}
-              color={rightAction.color || Colors.primary}
-            />
+            <Ionicons name={rightAction.icon} size={18} color={actionColor} />
           ) : null}
           {rightAction.label ? (
-            <Text
-              style={[
-                styles.rightButtonText,
-                { color: rightAction.color || Colors.primary },
-              ]}
-            >
+            <Text style={[styles.rightButtonText, { color: actionColor }]}>
               {rightAction.label}
             </Text>
           ) : null}
-        </TouchableOpacity>
+        </PressableScale>
       ) : null}
     </View>
   );
@@ -86,45 +83,53 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    minHeight: 56,
-  },
-  leftContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+    paddingBottom: Spacing.md,
+    paddingTop: Spacing.md,
+    backgroundColor: Colors.background,
+    minHeight: 60,
+    gap: Spacing.md,
   },
   backButton: {
-    marginRight: Spacing.sm,
-    padding: Spacing.xs,
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   titleContainer: {
     flex: 1,
   },
   title: {
     ...Typography.titleMedium,
-    color: Colors.text,
+  },
+  titleRoot: {
+    ...Typography.titleLarge,
   },
   subtitle: {
     ...Typography.bodySmall,
-    color: Colors.textSecondary,
-    marginTop: 2,
+    marginTop: 1,
   },
   rightButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    marginLeft: Spacing.sm,
+    gap: 6,
+    height: 38,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryLight,
+  },
+  rightButtonIconOnly: {
+    width: 40,
+    height: 40,
+    paddingHorizontal: 0,
+    justifyContent: 'center',
   },
   rightButtonText: {
-    ...Typography.button,
-    fontSize: 14,
-    marginLeft: Spacing.xs,
+    fontFamily: Fonts.semibold,
+    fontSize: 13,
   },
 });

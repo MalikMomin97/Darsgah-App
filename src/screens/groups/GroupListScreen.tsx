@@ -1,17 +1,27 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
+import { Chip } from '../../components/common/Chip';
+import { IconCircle } from '../../components/common/IconCircle';
+import { FadeInView, PressableScale } from '../../components/common/Motion';
 import { EmptyState } from '../../components/common/EmptyState';
 import { LoadingScreen } from '../../components/common/LoadingScreen';
-import { Colors, Spacing, Typography, BorderRadius } from '../../config/theme';
+import { Colors, Spacing, Typography, BorderRadius, Fonts } from '../../config/theme';
 import { Group } from '../../types';
 import { GroupService } from '../../services/groupService';
 import { useFocusEffect } from 'expo-router';
 import { useAppNavigation } from '../../navigation/appNavigation';
 
+/** Rotating token tints for group medallions. */
+const GROUP_TONES = [
+  { fg: Colors.primary, bg: Colors.primaryLight },
+  { fg: Colors.accentDark, bg: Colors.accentLight },
+  { fg: Colors.info, bg: Colors.infoLight },
+  { fg: Colors.holiday, bg: Colors.holidayBg },
+];
 
 export const GroupListScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -37,51 +47,66 @@ export const GroupListScreen: React.FC = () => {
     }, [fetchGroups])
   );
 
-  const renderGroupItem = ({ item }: { item: Group }) => (
-    <Card
-      style={styles.groupCard}
-      onPress={() => navigation.navigate('GroupDetail', { groupId: item.id })}
-    >
-      <View style={styles.cardHeader}>
-        <View style={styles.titleWrap}>
-          <Text style={styles.groupName}>{item.name}</Text>
-          {item.isArchived ? <Badge type="archived" size="sm" /> : null}
-        </View>
-        <View style={styles.badgeContainer}>
-          <View style={styles.studentCountBadge}>
-            <Ionicons name="people" size={14} color={Colors.primary} />
-            <Text style={styles.studentCountText}>
-              {item.studentCount ?? 0} {item.studentCount === 1 ? 'Student' : 'Students'}
-            </Text>
+  const renderGroupItem = ({ item, index }: { item: Group; index: number }) => {
+    const tone = GROUP_TONES[index % GROUP_TONES.length];
+    return (
+      <FadeInView index={index}>
+        <Card
+          style={styles.groupCard}
+          onPress={() => navigation.navigate('GroupDetail', { groupId: item.id })}
+        >
+          <View style={styles.cardHeader}>
+            <IconCircle icon="layers" size={46} square color={tone.fg} bg={tone.bg} />
+            <View style={styles.titleCol}>
+              <View style={styles.titleWrap}>
+                <Text style={styles.groupName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                {item.isArchived ? <Badge type="archived" size="sm" /> : null}
+              </View>
+              <View style={styles.studentCountRow}>
+                <Ionicons name="people" size={13} color={Colors.textMuted} />
+                <Text style={styles.studentCountText}>
+                  {item.studentCount ?? 0} {item.studentCount === 1 ? 'Student' : 'Students'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.chevronWrap}>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+            </View>
           </View>
-        </View>
-      </View>
 
-      {item.description ? (
-        <Text style={styles.groupDesc} numberOfLines={2}>
-          {item.description}
-        </Text>
-      ) : null}
+          {item.description ? (
+            <Text style={styles.groupDesc} numberOfLines={2}>
+              {item.description}
+            </Text>
+          ) : null}
 
-      <View style={styles.cardFooter}>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate('DailyAttendance', { groupId: item.id })}
-        >
-          <Ionicons name="checkbox-outline" size={16} color={Colors.primary} />
-          <Text style={styles.actionBtnText}>Take Attendance</Text>
-        </TouchableOpacity>
+          <View style={styles.cardFooter}>
+            <PressableScale
+              style={[styles.actionBtn, styles.actionBtnPrimary]}
+              onPress={() => navigation.navigate('DailyAttendance', { groupId: item.id })}
+              pressedScale={0.95}
+              hapticOnPress
+            >
+              <Ionicons name="checkbox-outline" size={16} color={Colors.primary} />
+              <Text style={styles.actionBtnText}>Take Attendance</Text>
+            </PressableScale>
 
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate('GroupForm', { groupId: item.id })}
-        >
-          <Ionicons name="create-outline" size={16} color={Colors.textSecondary} />
-          <Text style={[styles.actionBtnText, { color: Colors.textSecondary }]}>Edit</Text>
-        </TouchableOpacity>
-      </View>
-    </Card>
-  );
+            <PressableScale
+              style={[styles.actionBtn, styles.actionBtnSecondary]}
+              onPress={() => navigation.navigate('GroupForm', { groupId: item.id })}
+              pressedScale={0.95}
+              hapticOnPress
+            >
+              <Ionicons name="create-outline" size={16} color={Colors.textSecondary} />
+              <Text style={[styles.actionBtnText, { color: Colors.textSecondary }]}>Edit</Text>
+            </PressableScale>
+          </View>
+        </Card>
+      </FadeInView>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -96,23 +121,18 @@ export const GroupListScreen: React.FC = () => {
 
       {/* Filter / Toggle Bar */}
       <View style={styles.filterBar}>
-        <TouchableOpacity
-          style={[styles.filterChip, !showArchived && styles.filterChipActive]}
+        <Chip
+          label="Active Groups"
+          icon="radio-button-on-outline"
+          selected={!showArchived}
           onPress={() => setShowArchived(false)}
-        >
-          <Text style={[styles.filterChipText, !showArchived && styles.filterChipTextActive]}>
-            Active Groups
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.filterChip, showArchived && styles.filterChipActive]}
+        />
+        <Chip
+          label="All (Incl. Archived)"
+          icon="archive-outline"
+          selected={showArchived}
           onPress={() => setShowArchived(true)}
-        >
-          <Text style={[styles.filterChipText, showArchived && styles.filterChipTextActive]}>
-            All (Incl. Archived)
-          </Text>
-        </TouchableOpacity>
+        />
       </View>
 
       {loading ? (
@@ -150,32 +170,14 @@ const styles = StyleSheet.create({
   filterBar: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.md,
     gap: Spacing.sm,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  filterChip: {
-    paddingVertical: 6,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceSubtle,
-  },
-  filterChipActive: {
-    backgroundColor: Colors.primaryLight,
-  },
-  filterChipText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  filterChipTextActive: {
-    color: Colors.primary,
-    fontWeight: '700',
   },
   listContent: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xxxl,
     gap: Spacing.md,
   },
   groupCard: {
@@ -183,62 +185,74 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.xs,
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  titleCol: {
+    flex: 1,
   },
   titleWrap: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
   groupName: {
     ...Typography.titleSmall,
-    color: Colors.text,
+    fontFamily: Fonts.bold,
+    fontSize: 17,
+    flexShrink: 1,
   },
-  badgeContainer: {
-    marginLeft: Spacing.sm,
-  },
-  studentCountBadge: {
+  studentCountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.full,
-    gap: 4,
+    gap: 5,
+    marginTop: 3,
   },
   studentCountText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '700',
+    ...Typography.bodySmall,
+    fontFamily: Fonts.medium,
+  },
+  chevronWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   groupDesc: {
-    ...Typography.bodySmall,
+    ...Typography.bodyMedium,
     color: Colors.textSecondary,
-    marginBottom: Spacing.md,
-    marginTop: 2,
+    marginTop: Spacing.md,
   },
   cardFooter: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    paddingTop: Spacing.sm,
-    gap: Spacing.md,
+    paddingTop: Spacing.md,
+    marginTop: Spacing.md,
+    gap: Spacing.sm,
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: Spacing.xs,
+    justifyContent: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+  },
+  actionBtnPrimary: {
+    flex: 1,
+    backgroundColor: Colors.primaryLight,
+  },
+  actionBtnSecondary: {
+    backgroundColor: Colors.surfaceSubtle,
   },
   actionBtnText: {
-    ...Typography.caption,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
+    fontSize: 13,
     color: Colors.primary,
   },
 });

@@ -1,23 +1,28 @@
 import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  RefreshControl,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../../components/common/Card';
-import { Colors, Spacing, Typography, BorderRadius, Shadows } from '../../config/theme';
+import { IconCircle } from '../../components/common/IconCircle';
+import { SectionHeader } from '../../components/common/SectionHeader';
+import { FadeInView, PressableScale, haptic } from '../../components/common/Motion';
+import {
+  Colors,
+  Spacing,
+  Typography,
+  BorderRadius,
+  Shadows,
+  Fonts,
+  Gradients,
+} from '../../config/theme';
 import { queryFirst, queryAll } from '../../db/database';
 import { getTodayDateString, formatDateDisplay, shiftDateString } from '../../utils/dateUtils';
 import { SettingsService } from '../../services/settingsService';
+import { AttendanceService } from '../../services/attendanceService';
+import { Holiday } from '../../types';
 import { useFocusEffect } from 'expo-router';
 import { useAppNavigation } from '../../navigation/appNavigation';
-
 
 interface GroupStatusItem {
   id: string;
@@ -45,11 +50,9 @@ export const DashboardScreen: React.FC = () => {
     totalGroups: 0,
     todayPresent: 0,
     todayAbsent: 0,
-    todayLate: 0,
-    todayExcused: 0,
+    todayHoliday: null as Holiday | null,
     needingRevision: 0,
     todaySabakRecorded: 0,
-    todayChaptersCompleted: 0,
   });
 
   const loadDashboardData = useCallback(async () => {
@@ -79,26 +82,13 @@ export const DashboardScreen: React.FC = () => {
         [today]
       );
 
-      let present = 0;
-      let absent = 0;
-      let late = 0;
-      let excused = 0;
+      const present = attRows.find((r) => r.status === 'present')?.count ?? 0;
+      const absent = attRows.find((r) => r.status === 'absent')?.count ?? 0;
+      const todayHoliday = await AttendanceService.getHoliday(today);
 
-      attRows.forEach((r) => {
-        if (r.status === 'present') present = r.count;
-        if (r.status === 'absent') absent = r.count;
-        if (r.status === 'late') late = r.count;
-        if (r.status === 'excused') excused = r.count;
-      });
-
-      // 3. Today's Sabak / Progress Stats
+      // 3. Today's Sabak count
       const todaySabakRes = await queryFirst<{ count: number }>(
         'SELECT COUNT(*) as count FROM lesson_log WHERE date = ?;',
-        [today]
-      );
-
-      const todayCompletedRes = await queryFirst<{ count: number }>(
-        'SELECT COUNT(*) as count FROM lesson_log WHERE date = ? AND is_completed = 1;',
         [today]
       );
 
@@ -132,11 +122,9 @@ export const DashboardScreen: React.FC = () => {
         totalGroups: grpRes?.count || 0,
         todayPresent: present,
         todayAbsent: absent,
-        todayLate: late,
-        todayExcused: excused,
+        todayHoliday,
         needingRevision: revRes?.count || 0,
         todaySabakRecorded: todaySabakRes?.count || 0,
-        todayChaptersCompleted: todayCompletedRes?.count || 0,
       });
 
       setGroupsStatus(formattedGroups);
@@ -154,394 +142,402 @@ export const DashboardScreen: React.FC = () => {
   );
 
   const todayStr = getTodayDateString();
-  const totalMarked = stats.todayPresent + stats.todayAbsent + stats.todayLate + stats.todayExcused;
-  const attendanceRate = totalMarked > 0 ? Math.round(((stats.todayPresent + stats.todayLate) / totalMarked) * 100) : 0;
+  const totalMarked = stats.todayPresent + stats.todayAbsent;
+  const attendanceRate = totalMarked > 0 ? Math.round((stats.todayPresent / totalMarked) * 100) : 0;
+
+  const quickActions: {
+    key: string;
+    title: string;
+    sub: string;
+    icon: React.ComponentProps<typeof IconCircle>['icon'];
+    color: string;
+    bg: string;
+    badge: string;
+    onPress: () => void;
+  }[] = [
+    {
+      key: 'attendance',
+      title: 'Take Attendance',
+      sub: 'Mark daily roll call',
+      icon: 'checkmark-done',
+      color: Colors.success,
+      bg: Colors.successLight,
+      badge: totalMarked > 0 ? `${totalMarked} marked` : 'Pending',
+      onPress: () => navigation.navigate('DailyAttendance', { date: todayStr }),
+    },
+    {
+      key: 'sabak',
+      title: 'Daily Sabak',
+      sub: 'Track lessons & marks',
+      icon: 'book',
+      color: Colors.accentDark,
+      bg: Colors.accentLight,
+      badge: stats.todaySabakRecorded > 0 ? `${stats.todaySabakRecorded} recorded` : 'Start now',
+      onPress: () => navigation.navigate('DailyProgress', { date: todayStr }),
+    },
+    {
+      key: 'student',
+      title: 'New Student',
+      sub: 'Register & assign group',
+      icon: 'person-add',
+      color: Colors.info,
+      bg: Colors.infoLight,
+      badge: `${stats.activeStudents} active`,
+      onPress: () => navigation.navigate('StudentForm', {}),
+    },
+    {
+      key: 'curriculum',
+      title: 'Curriculum',
+      sub: 'Books & Chapters',
+      icon: 'library',
+      color: Colors.holiday,
+      bg: Colors.holidayBg,
+      badge: 'Manage',
+      onPress: () => navigation.navigate('BookList'),
+    },
+  ];
+
+  const heroStats = [
+    { label: 'Students', value: stats.activeStudents, icon: 'people-outline' as const },
+    { label: 'Groups', value: stats.totalGroups, icon: 'grid-outline' as const },
+    {
+      label: 'Present',
+      value: stats.todayPresent,
+      icon: 'checkmark-circle-outline' as const,
+      tint: Colors.successLight,
+    },
+    {
+      label: 'Sabak',
+      value: stats.todaySabakRecorded,
+      icon: 'book-outline' as const,
+      tint: Colors.accentLight,
+    },
+  ];
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={loadDashboardData} colors={[Colors.primary]} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={loading}
+          onRefresh={loadDashboardData}
+          colors={[Colors.primary]}
+          tintColor={Colors.primary}
+        />
+      }
     >
-      {/* 1. HERO HEADER CARD (Premium Gradient) */}
+      {/* 1. HERO HEADER */}
       <LinearGradient
-        colors={['#064E3B', '#0F5132', '#022C22']}
+        colors={Gradients.brandDeep}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.heroCard, { paddingTop: Spacing.xl + insets.top }]}
+        style={[styles.hero, { paddingTop: Spacing.lg + insets.top }]}
       >
-        {/* Subtle Decorative Background Rings */}
-        <View style={styles.decorativeCircle1} />
-        <View style={styles.decorativeCircle2} />
+        {/* Decorative rings */}
+        <View style={styles.ringLarge} />
+        <View style={styles.ringSmall} />
+        <View style={styles.goldGlow} />
 
-        {/* Top Utility Row */}
-        <View style={styles.heroTopRow}>
-          <View style={styles.arabicPill}>
-            <Text style={styles.arabicPillText}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</Text>
+        <FadeInView style={styles.heroTopRow}>
+          <View style={styles.bismillahPill}>
+            <Text style={styles.bismillahText}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.glassSettingsBtn}
+          <PressableScale
+            style={styles.glassButton}
             onPress={() => navigation.navigate('Settings')}
-            activeOpacity={0.8}
+            pressedScale={0.9}
+            hapticOnPress
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
           >
-            <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
+            <Ionicons name="settings-outline" size={20} color={Colors.textInverse} />
+          </PressableScale>
+        </FadeInView>
 
-        {/* Institution & Greeting */}
-        <View style={styles.heroMain}>
-          <Text style={styles.institutionTitle}>{institutionName}</Text>
-          <View style={styles.sessionBadgeRow}>
-            <View style={styles.sessionBadge}>
-              <Ionicons name="school-outline" size={12} color="#FDE68A" />
-              <Text style={styles.sessionBadgeText}>{academicSession}</Text>
-            </View>
-            <View style={styles.dateBadge}>
-              <Ionicons name="calendar-outline" size={12} color="#FFFFFF" />
-              <Text style={styles.dateBadgeText}>{formatDateDisplay(todayStr)}</Text>
-            </View>
-          </View>
-          <Text style={styles.heroGreeting}>
-            {getTimeGreeting()}, Ustadh 👋
+        <FadeInView index={1} style={styles.heroMain}>
+          <Text style={styles.heroGreeting}>{getTimeGreeting()}, Ustadh</Text>
+          <Text style={styles.institutionTitle} numberOfLines={2}>
+            {institutionName}
           </Text>
-        </View>
+          <View style={styles.heroPillsRow}>
+            <View style={[styles.heroPill, styles.heroPillGold]}>
+              <Ionicons name="school" size={12} color={Colors.accentLight} />
+              <Text style={[styles.heroPillText, { color: Colors.accentLight }]}>
+                {academicSession}
+              </Text>
+            </View>
+            <View style={styles.heroPill}>
+              <Ionicons name="calendar-outline" size={12} color={Colors.textInverse} />
+              <Text style={styles.heroPillText}>{formatDateDisplay(todayStr)}</Text>
+            </View>
+          </View>
+        </FadeInView>
 
-        {/* Floating Quick Summary Strip Inside Hero */}
-        <View style={styles.heroStatsStrip}>
-          <View style={styles.heroStatItem}>
-            <Text style={styles.heroStatNumber}>{stats.activeStudents}</Text>
-            <Text style={styles.heroStatLabel}>Students</Text>
-          </View>
-          <View style={styles.heroStatDivider} />
-          <View style={styles.heroStatItem}>
-            <Text style={styles.heroStatNumber}>{stats.totalGroups}</Text>
-            <Text style={styles.heroStatLabel}>Groups</Text>
-          </View>
-          <View style={styles.heroStatDivider} />
-          <View style={styles.heroStatItem}>
-            <Text style={[styles.heroStatNumber, { color: '#86EFAC' }]}>
-              {stats.todayPresent}
-            </Text>
-            <Text style={styles.heroStatLabel}>Present</Text>
-          </View>
-          <View style={styles.heroStatDivider} />
-          <View style={styles.heroStatItem}>
-            <Text style={[styles.heroStatNumber, { color: '#FDE68A' }]}>
-              {stats.todaySabakRecorded}
-            </Text>
-            <Text style={styles.heroStatLabel}>Sabak</Text>
-          </View>
-        </View>
+        {/* Stat tiles */}
+        <FadeInView index={2} style={styles.heroStatsRow}>
+          {heroStats.map((s) => (
+            <View key={s.label} style={styles.heroStatTile}>
+              <Ionicons
+                name={s.icon}
+                size={15}
+                color={s.tint ?? 'rgba(255, 255, 255, 0.75)'}
+                style={styles.heroStatIcon}
+              />
+              <Text style={[styles.heroStatNumber, s.tint ? { color: s.tint } : null]}>
+                {s.value}
+              </Text>
+              <Text style={styles.heroStatLabel}>{s.label}</Text>
+            </View>
+          ))}
+        </FadeInView>
       </LinearGradient>
 
-      {/* 2. PRIMARY ACTION CENTER (Quick Action Grid) */}
-      <View style={styles.sectionHeaderWrap}>
-        <Text style={styles.sectionHeading}>Daily Classroom Hub</Text>
-        <Text style={styles.sectionSubheading}>Quick shortcuts for your daily teaching routine</Text>
-      </View>
+      <View style={styles.body}>
+        {/* 2. QUICK ACTION GRID */}
+        <FadeInView index={3} style={styles.sectionIntro}>
+          <Text style={styles.sectionHeading}>Daily Classroom Hub</Text>
+          <Text style={styles.sectionSubheading}>
+            Quick shortcuts for your daily teaching routine
+          </Text>
+        </FadeInView>
 
-      <View style={styles.actionGrid}>
-        {/* Action 1: Daily Attendance */}
-        <TouchableOpacity
-          style={[styles.actionCard, { borderColor: '#BBF7D0' }]}
-          onPress={() => navigation.navigate('DailyAttendance', { date: todayStr })}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.actionIconWrap, { backgroundColor: '#DCFCE7' }]}>
-            <Ionicons name="checkbox" size={24} color="#16A34A" />
-          </View>
-          <Text style={styles.actionCardTitle}>Take Attendance</Text>
-          <Text style={styles.actionCardSub}>Mark daily roll call</Text>
-          <View style={styles.actionBadgePill}>
-            <Text style={[styles.actionBadgeText, { color: '#16A34A' }]}>
-              {totalMarked > 0 ? `${totalMarked} marked` : 'Pending'}
-            </Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.actionGrid}>
+          {quickActions.map((a, i) => (
+            <FadeInView key={a.key} index={4 + i} style={styles.actionCell}>
+              <PressableScale
+                style={styles.actionCard}
+                onPress={a.onPress}
+                hapticOnPress
+                accessibilityRole="button"
+                accessibilityLabel={a.title}
+              >
+                <View style={styles.actionTopRow}>
+                  <IconCircle icon={a.icon} color={a.color} bg={a.bg} size={44} square />
+                  <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
+                </View>
+                <Text style={styles.actionCardTitle} numberOfLines={1}>
+                  {a.title}
+                </Text>
+                <Text style={styles.actionCardSub} numberOfLines={1}>
+                  {a.sub}
+                </Text>
+                <View style={[styles.actionBadge, { backgroundColor: a.bg }]}>
+                  <View style={[styles.actionBadgeDot, { backgroundColor: a.color }]} />
+                  <Text style={[styles.actionBadgeText, { color: a.color }]} numberOfLines={1}>
+                    {a.badge}
+                  </Text>
+                </View>
+              </PressableScale>
+            </FadeInView>
+          ))}
+        </View>
 
-        {/* Action 2: Daily Sabak Tracker */}
-        <TouchableOpacity
-          style={[styles.actionCard, { borderColor: '#FED7AA' }]}
-          onPress={() => navigation.navigate('DailyProgress', { date: todayStr })}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.actionIconWrap, { backgroundColor: '#FEF3C7' }]}>
-            <Ionicons name="book" size={24} color="#D97706" />
-          </View>
-          <Text style={styles.actionCardTitle}>Daily Sabak</Text>
-          <Text style={styles.actionCardSub}>Track lessons & marks</Text>
-          <View style={[styles.actionBadgePill, { backgroundColor: '#FEF3C7' }]}>
-            <Text style={[styles.actionBadgeText, { color: '#D97706' }]}>
-              {stats.todaySabakRecorded > 0 ? `${stats.todaySabakRecorded} recorded` : 'Start now'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Action 3: Register Student */}
-        <TouchableOpacity
-          style={[styles.actionCard, { borderColor: '#BAE6FD' }]}
-          onPress={() => navigation.navigate('StudentForm', {})}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.actionIconWrap, { backgroundColor: '#E0F2FE' }]}>
-            <Ionicons name="person-add" size={24} color="#0284C7" />
-          </View>
-          <Text style={styles.actionCardTitle}>New Student</Text>
-          <Text style={styles.actionCardSub}>Register & assign group</Text>
-          <View style={[styles.actionBadgePill, { backgroundColor: '#E0F2FE' }]}>
-            <Text style={[styles.actionBadgeText, { color: '#0284C7' }]}>
-              {stats.activeStudents} active
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Action 4: Curriculum Management */}
-        <TouchableOpacity
-          style={[styles.actionCard, { borderColor: '#DDD6FE' }]}
-          onPress={() => navigation.navigate('BookList')}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.actionIconWrap, { backgroundColor: '#EDE9FE' }]}>
-            <Ionicons name="library" size={24} color="#7C3AED" />
-          </View>
-          <Text style={styles.actionCardTitle}>Curriculum</Text>
-          <Text style={styles.actionCardSub}>Books & Chapters</Text>
-          <View style={[styles.actionBadgePill, { backgroundColor: '#EDE9FE' }]}>
-            <Text style={[styles.actionBadgeText, { color: '#7C3AED' }]}>
-              Manage
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* 3. TODAY'S ATTENDANCE STATUS CARD */}
-      <Card style={styles.pulseCard}>
-        <View style={styles.pulseHeader}>
-          <View style={styles.pulseTitleRow}>
-            <View style={[styles.pulseIconCircle, { backgroundColor: '#DCFCE7' }]}>
-              <Ionicons name="people" size={20} color="#16A34A" />
+        {/* 3. TODAY'S ATTENDANCE CARD */}
+        <FadeInView index={8}>
+          <Card style={styles.pulseCard} padding="xl" elevation="md">
+            <View style={styles.pulseHeader}>
+              <IconCircle
+                icon={stats.todayHoliday ? 'sunny' : 'people'}
+                color={stats.todayHoliday ? Colors.holiday : Colors.primary}
+                bg={stats.todayHoliday ? Colors.holidayBg : Colors.primaryLight}
+                size={44}
+              />
+              <View style={styles.pulseTitleWrap}>
+                <Text style={styles.pulseOverline}>Today</Text>
+                <Text style={styles.pulseTitle}>Attendance Pulse</Text>
+              </View>
+              {totalMarked > 0 && (
+                <View style={styles.ratePill}>
+                  <Text style={styles.ratePillText}>{attendanceRate}%</Text>
+                </View>
+              )}
             </View>
-            <View>
-              <Text style={styles.pulseTitle}>Today&apos;s Attendance Pulse</Text>
-              <Text style={styles.pulseSub}>
-                {totalMarked > 0
+
+            <Text style={[styles.pulseSub, stats.todayHoliday ? styles.pulseSubHoliday : null]}>
+              {stats.todayHoliday
+                ? `Darsgah off today${stats.todayHoliday.reason ? ` · ${stats.todayHoliday.reason}` : ''}`
+                : totalMarked > 0
                   ? `${totalMarked} of ${stats.activeStudents} students recorded`
                   : 'Attendance not recorded yet today'}
-              </Text>
-            </View>
-          </View>
-
-          {totalMarked > 0 && (
-            <View style={styles.ratePill}>
-              <Text style={styles.ratePillText}>{attendanceRate}%</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Segmented Distribution Bar */}
-        {totalMarked > 0 ? (
-          <View style={styles.progressTrack}>
-            {stats.todayPresent > 0 && (
-              <View
-                style={[
-                  styles.progressSegment,
-                  { flex: stats.todayPresent, backgroundColor: Colors.present },
-                ]}
-              />
-            )}
-            {stats.todayLate > 0 && (
-              <View
-                style={[
-                  styles.progressSegment,
-                  { flex: stats.todayLate, backgroundColor: Colors.late },
-                ]}
-              />
-            )}
-            {stats.todayAbsent > 0 && (
-              <View
-                style={[
-                  styles.progressSegment,
-                  { flex: stats.todayAbsent, backgroundColor: Colors.absent },
-                ]}
-              />
-            )}
-            {stats.todayExcused > 0 && (
-              <View
-                style={[
-                  styles.progressSegment,
-                  { flex: stats.todayExcused, backgroundColor: Colors.excused },
-                ]}
-              />
-            )}
-          </View>
-        ) : (
-          <View style={[styles.progressTrack, { backgroundColor: Colors.surfaceSubtle }]}>
-            <View style={{ flex: 1, backgroundColor: '#E2E8F0', borderRadius: 4 }} />
-          </View>
-        )}
-
-        {/* Metrics Row */}
-        <View style={styles.pulseStatsRow}>
-          <View style={[styles.pulsePillBox, { backgroundColor: '#F0FDF4' }]}>
-            <Text style={[styles.pulseNum, { color: Colors.present }]}>{stats.todayPresent}</Text>
-            <Text style={styles.pulseLbl}>Present</Text>
-          </View>
-          <View style={[styles.pulsePillBox, { backgroundColor: '#FFFBEB' }]}>
-            <Text style={[styles.pulseNum, { color: Colors.late }]}>{stats.todayLate}</Text>
-            <Text style={styles.pulseLbl}>Late</Text>
-          </View>
-          <View style={[styles.pulsePillBox, { backgroundColor: '#FEF2F2' }]}>
-            <Text style={[styles.pulseNum, { color: Colors.absent }]}>{stats.todayAbsent}</Text>
-            <Text style={styles.pulseLbl}>Absent</Text>
-          </View>
-          <View style={[styles.pulsePillBox, { backgroundColor: '#EEF2FF' }]}>
-            <Text style={[styles.pulseNum, { color: Colors.excused }]}>{stats.todayExcused}</Text>
-            <Text style={styles.pulseLbl}>Excused</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.openSheetBtn}
-          onPress={() => navigation.navigate('DailyAttendance', { date: todayStr })}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.openSheetBtnText}>Open Daily Attendance Register</Text>
-          <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
-        </TouchableOpacity>
-      </Card>
-
-      {/* 4. TODAY'S SABAK PROGRESS HIGHLIGHT */}
-      <Card style={styles.pulseCard}>
-        <View style={styles.pulseHeader}>
-          <View style={styles.pulseTitleRow}>
-            <View style={[styles.pulseIconCircle, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="sparkles" size={20} color="#D97706" />
-            </View>
-            <View>
-              <Text style={styles.pulseTitle}>Daily Sabak & Lesson Progress</Text>
-              <Text style={styles.pulseSub}>
-                {stats.todaySabakRecorded > 0
-                  ? `${stats.todaySabakRecorded} lessons assessed today`
-                  : 'No sabak recorded today yet'}
-              </Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.openSabakBtn}
-            onPress={() => navigation.navigate('DailyProgress', { date: todayStr })}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.openSabakBtnText}>Record</Text>
-            <Ionicons name="arrow-forward" size={14} color="#D97706" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.sabakMetricRow}>
-          <View style={styles.sabakMetricCard}>
-            <Ionicons name="book-outline" size={18} color={Colors.primary} />
-            <Text style={styles.sabakMetricVal}>{stats.todaySabakRecorded}</Text>
-            <Text style={styles.sabakMetricLbl}>Lessons Rated Today</Text>
-          </View>
-
-          <View style={styles.sabakMetricCard}>
-            <Ionicons name="checkmark-done-circle-outline" size={18} color="#16A34A" />
-            <Text style={[styles.sabakMetricVal, { color: '#16A34A' }]}>
-              {stats.todayChaptersCompleted}
             </Text>
-            <Text style={styles.sabakMetricLbl}>Chapters Finished</Text>
-          </View>
 
-          <View style={styles.sabakMetricCard}>
-            <Ionicons name="flag-outline" size={18} color="#DC2626" />
-            <Text style={[styles.sabakMetricVal, { color: '#DC2626' }]}>
-              {stats.needingRevision}
-            </Text>
-            <Text style={styles.sabakMetricLbl}>Need Improvement</Text>
-          </View>
-        </View>
-      </Card>
+            {/* Segmented distribution bar */}
+            <View style={styles.progressTrack}>
+              {totalMarked > 0 ? (
+                <>
+                  {stats.todayPresent > 0 && (
+                    <View
+                      style={[
+                        styles.progressSegment,
+                        { flex: stats.todayPresent, backgroundColor: Colors.present },
+                      ]}
+                    />
+                  )}
+                  {stats.todayAbsent > 0 && (
+                    <View
+                      style={[
+                        styles.progressSegment,
+                        { flex: stats.todayAbsent, backgroundColor: Colors.absent },
+                      ]}
+                    />
+                  )}
+                </>
+              ) : (
+                <View style={[styles.progressSegment, styles.progressEmpty]} />
+              )}
+            </View>
 
-      {/* 5. CLASS GROUPS QUICK CAROUSEL */}
+            {/* Metrics */}
+            <View style={styles.pulseStatsRow}>
+              <View style={[styles.pulseMetric, { backgroundColor: Colors.presentBg }]}>
+                <View style={[styles.pulseMetricDot, { backgroundColor: Colors.present }]} />
+                <View>
+                  <Text style={[styles.pulseNum, { color: Colors.present }]}>
+                    {stats.todayPresent}
+                  </Text>
+                  <Text style={styles.pulseLbl}>Present</Text>
+                </View>
+              </View>
+              <View style={[styles.pulseMetric, { backgroundColor: Colors.absentBg }]}>
+                <View style={[styles.pulseMetricDot, { backgroundColor: Colors.absent }]} />
+                <View>
+                  <Text style={[styles.pulseNum, { color: Colors.absent }]}>
+                    {stats.todayAbsent}
+                  </Text>
+                  <Text style={styles.pulseLbl}>Absent</Text>
+                </View>
+              </View>
+            </View>
+
+            <PressableScale
+              style={styles.openSheetBtn}
+              onPress={() => navigation.navigate('DailyAttendance', { date: todayStr })}
+              hapticOnPress
+              accessibilityRole="button"
+            >
+              <Text style={styles.openSheetBtnText}>Open Daily Attendance Register</Text>
+              <View style={styles.openSheetArrow}>
+                <Ionicons name="arrow-forward" size={14} color={Colors.textInverse} />
+              </View>
+            </PressableScale>
+          </Card>
+        </FadeInView>
+      </View>
+
+      {/* 4. GROUP CAROUSEL */}
       {groupsStatus.length > 0 && (
-        <View style={styles.groupsSection}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeading}>Student Groups ({groupsStatus.length})</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('GroupList')}>
-              <Text style={styles.seeAllText}>View All Groups ➔</Text>
-            </TouchableOpacity>
-          </View>
+        <FadeInView index={9} style={styles.groupsSection}>
+          <SectionHeader
+            title="Student Groups"
+            meta={`${groupsStatus.length}`}
+            actionLabel="View all"
+            onAction={() => {
+              haptic.select();
+              navigation.navigate('GroupList');
+            }}
+            style={styles.gutter}
+          />
 
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.groupsCarousel}
+            decelerationRate="fast"
+            snapToInterval={GROUP_CARD_WIDTH + Spacing.md}
+            snapToAlignment="start"
           >
-            {groupsStatus.map((grp) => (
-              <TouchableOpacity
-                key={grp.id}
-                style={styles.groupCarouselCard}
-                onPress={() => navigation.navigate('GroupDetail', { groupId: grp.id })}
-                activeOpacity={0.8}
-              >
-                <View style={styles.groupCardHeader}>
+            {groupsStatus.map((grp, i) => (
+              <FadeInView key={grp.id} index={10 + i}>
+                <PressableScale
+                  style={styles.groupCard}
+                  onPress={() => navigation.navigate('GroupDetail', { groupId: grp.id })}
+                  hapticOnPress
+                  accessibilityRole="button"
+                  accessibilityLabel={grp.name}
+                >
+                  <View style={styles.groupCardHeader}>
+                    <IconCircle
+                      icon="people"
+                      size={38}
+                      square
+                      color={Colors.primary}
+                      bg={Colors.primaryLight}
+                    />
+                    {stats.todayHoliday ? (
+                      <View style={[styles.groupStatus, { backgroundColor: Colors.holidayBg }]}>
+                        <Text style={[styles.groupStatusText, { color: Colors.holiday }]}>Off</Text>
+                      </View>
+                    ) : grp.attendanceMarked ? (
+                      <View style={[styles.groupStatus, { backgroundColor: Colors.successLight }]}>
+                        <Ionicons name="checkmark-circle" size={13} color={Colors.success} />
+                        <Text style={[styles.groupStatusText, { color: Colors.success }]}>
+                          Done
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.groupStatus, { backgroundColor: Colors.warningLight }]}>
+                        <Text style={[styles.groupStatusText, { color: Colors.accentDark }]}>
+                          Pending
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
                   <Text style={styles.groupCardName} numberOfLines={1}>
                     {grp.name}
                   </Text>
-                  {grp.attendanceMarked ? (
-                    <View style={styles.groupAttendanceDone}>
-                      <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
-                      <Text style={styles.groupAttendanceDoneText}>Done</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.groupAttendancePending}>
-                      <Text style={styles.groupAttendancePendingText}>Pending</Text>
-                    </View>
-                  )}
-                </View>
 
-                <View style={styles.groupCardFooter}>
-                  <View style={styles.studentCountWrap}>
-                    <Ionicons name="people-outline" size={14} color={Colors.textSecondary} />
-                    <Text style={styles.studentCountText}>{grp.studentCount} Students</Text>
+                  <View style={styles.groupCardFooter}>
+                    <View style={styles.studentCountWrap}>
+                      <Ionicons name="person-outline" size={13} color={Colors.textSecondary} />
+                      <Text style={styles.studentCountText}>{grp.studentCount} Students</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-                </View>
-              </TouchableOpacity>
+                </PressableScale>
+              </FadeInView>
             ))}
           </ScrollView>
-        </View>
+        </FadeInView>
       )}
 
-      {/* 6. REVISION REQUIRED ALERT (Only if any) */}
+      {/* 5. NEEDS-IMPROVEMENT ALERT */}
       {stats.needingRevision > 0 && (
-        <Card style={styles.revisionWarningCard}>
-          <View style={styles.revisionRow}>
-            <View style={styles.revisionIconWrap}>
-              <Ionicons name="alert-circle" size={24} color="#D97706" />
-            </View>
-            <View style={styles.revisionTextWrap}>
-              <Text style={styles.revisionTitle}>
-                {stats.needingRevision} Student{stats.needingRevision > 1 ? 's' : ''} Need Improvement
+        <FadeInView index={10} style={styles.gutter}>
+          <View style={styles.alertCard}>
+            <View style={styles.alertAccent} />
+            <IconCircle icon="alert-circle" color={Colors.warning} bg={Colors.warningLight} />
+            <View style={styles.alertTextWrap}>
+              <Text style={styles.alertTitle}>
+                {stats.needingRevision} Student{stats.needingRevision > 1 ? 's' : ''} Need
+                Improvement
               </Text>
-              <Text style={styles.revisionSubtitle}>
+              <Text style={styles.alertSubtitle}>
                 Rated Needs Improvement or Bad in the last 7 days.
               </Text>
             </View>
-            <TouchableOpacity
+            <PressableScale
               style={styles.reviewBtn}
               onPress={() => navigation.navigate('DailyProgress', { date: todayStr })}
+              pressedScale={0.94}
+              hapticOnPress
+              accessibilityRole="button"
             >
               <Text style={styles.reviewBtnText}>Review</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
-        </Card>
+        </FadeInView>
       )}
     </ScrollView>
   );
 };
+
+const GROUP_CARD_WIDTH = 176;
+
+const glassBorder = 'rgba(255, 255, 255, 0.14)';
 
 const styles = StyleSheet.create({
   container: {
@@ -549,418 +545,383 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    paddingBottom: Spacing.xxxl,
+    paddingBottom: Spacing.xxxl + Spacing.lg,
+  },
+  gutter: {
+    paddingHorizontal: Spacing.lg,
+  },
+  body: {
+    paddingHorizontal: Spacing.lg,
   },
 
-  // Hero Card Styles
-  heroCard: {
-    paddingTop: Spacing.xl,
+  // Hero
+  hero: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    borderBottomLeftRadius: BorderRadius.xl,
-    borderBottomRightRadius: BorderRadius.xl,
-    position: 'relative',
+    paddingBottom: Spacing.xl,
+    borderBottomLeftRadius: BorderRadius.xl + 4,
+    borderBottomRightRadius: BorderRadius.xl + 4,
     overflow: 'hidden',
     ...Shadows.lg,
   },
-  decorativeCircle1: {
+  ringLarge: {
     position: 'absolute',
-    top: -40,
-    right: -40,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    top: -70,
+    right: -60,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    borderWidth: 28,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
-  decorativeCircle2: {
+  ringSmall: {
     position: 'absolute',
-    bottom: -30,
-    left: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    bottom: -50,
+    left: -40,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+  },
+  goldGlow: {
+    position: 'absolute',
+    top: 40,
+    right: 30,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(212, 166, 69, 0.10)',
   },
   heroTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xl,
   },
-  arabicPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  bismillahPill: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: 4,
+    paddingVertical: 2,
     borderRadius: BorderRadius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: glassBorder,
   },
-  arabicPillText: {
-    color: '#FDE68A',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+  bismillahText: {
+    fontFamily: Fonts.arabic,
+    fontSize: 16,
+    lineHeight: 28,
+    color: Colors.accentLight,
   },
-  glassSettingsBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  glassButton: {
+    width: 42,
+    height: 42,
+    borderRadius: BorderRadius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: glassBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   heroMain: {
-    marginBottom: Spacing.lg,
-  },
-  institutionTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  sessionBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.sm,
-  },
-  sessionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(253, 230, 138, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-  },
-  sessionBadgeText: {
-    color: '#FDE68A',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  dateBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-  },
-  dateBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
+    marginBottom: Spacing.xl,
   },
   heroGreeting: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#E2E8F0',
-    marginTop: 2,
+    ...Typography.overline,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginBottom: Spacing.xs,
   },
-  heroStatsStrip: {
+  institutionTitle: {
+    ...Typography.display,
+    fontSize: 28,
+    lineHeight: 35,
+    color: Colors.textInverse,
+  },
+  heroPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  heroPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: glassBorder,
   },
-  heroStatItem: {
-    alignItems: 'center',
+  heroPillGold: {
+    backgroundColor: Colors.accentGlow,
+    borderColor: 'rgba(212, 166, 69, 0.38)',
+  },
+  heroPillText: {
+    fontFamily: Fonts.semibold,
+    fontSize: 12,
+    color: Colors.textInverse,
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  heroStatTile: {
     flex: 1,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    borderWidth: 1,
+    borderColor: glassBorder,
+    alignItems: 'center',
+  },
+  heroStatIcon: {
+    marginBottom: 6,
   },
   heroStatNumber: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontFamily: Fonts.extrabold,
+    fontSize: 22,
+    lineHeight: 27,
+    letterSpacing: -0.4,
+    color: Colors.textInverse,
   },
   heroStatLabel: {
+    fontFamily: Fonts.medium,
     fontSize: 11,
-    color: '#CBD5E1',
-    fontWeight: '600',
+    lineHeight: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 2,
   },
-  heroStatDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
 
-  // Section Headers
-  sectionHeaderWrap: {
-    paddingHorizontal: Spacing.lg,
-    marginTop: Spacing.xl,
-    marginBottom: Spacing.sm,
+  // Section intro
+  sectionIntro: {
+    marginTop: Spacing.xxl,
+    marginBottom: Spacing.md,
   },
   sectionHeading: {
     ...Typography.titleSmall,
-    color: Colors.text,
-    fontWeight: '800',
-    letterSpacing: 0.2,
+    fontFamily: Fonts.bold,
+    fontSize: 17,
   },
   sectionSubheading: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+    ...Typography.bodySmall,
     marginTop: 2,
   },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    marginTop: Spacing.xl,
-    marginBottom: Spacing.sm,
-  },
-  seeAllText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '700',
-  },
 
-  // Action Center Grid
+  // Quick actions
   actionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.md,
+    justifyContent: 'space-between',
+    rowGap: Spacing.md,
+  },
+  actionCell: {
+    width: '48.2%',
   },
   actionCard: {
-    width: '47.5%',
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
     ...Shadows.sm,
   },
-  actionIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
-  },
-  actionCardTitle: {
-    ...Typography.bodyMedium,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  actionCardSub: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  actionBadgePill: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-    marginTop: Spacing.sm,
-  },
-  actionBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-
-  // Pulse Cards
-  pulseCard: {
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.lg,
-    padding: Spacing.lg,
-  },
-  pulseHeader: {
+  actionTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
+    justifyContent: 'space-between',
     marginBottom: Spacing.md,
   },
-  pulseTitleRow: {
+  actionCardTitle: {
+    ...Typography.titleSmall,
+    fontFamily: Fonts.bold,
+    fontSize: 15,
+  },
+  actionCardSub: {
+    ...Typography.bodySmall,
+    marginTop: 2,
+  },
+  actionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    flex: 1,
-  },
-  pulseIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pulseTitle: {
-    ...Typography.titleSmall,
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  pulseSub: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 1,
-  },
-  ratePill: {
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: Spacing.sm,
+    alignSelf: 'flex-start',
+    gap: 5,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.sm + 2,
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
   },
+  actionBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  actionBadgeText: {
+    fontFamily: Fonts.semibold,
+    fontSize: 11.5,
+  },
+
+  // Attendance pulse
+  pulseCard: {
+    marginTop: Spacing.xxl,
+  },
+  pulseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  pulseTitleWrap: {
+    flex: 1,
+  },
+  pulseOverline: {
+    ...Typography.overline,
+  },
+  pulseTitle: {
+    ...Typography.titleMedium,
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  ratePill: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primary,
+  },
   ratePillText: {
-    ...Typography.caption,
-    color: Colors.primaryDark,
-    fontWeight: '800',
-    fontSize: 12,
+    fontFamily: Fonts.extrabold,
+    fontSize: 15,
+    color: Colors.textInverse,
+  },
+  pulseSub: {
+    ...Typography.bodyMedium,
+    color: Colors.textSecondary,
+    marginTop: Spacing.md,
+  },
+  pulseSubHoliday: {
+    fontFamily: Fonts.semibold,
+    color: Colors.holiday,
   },
   progressTrack: {
-    height: 8,
-    borderRadius: 4,
     flexDirection: 'row',
+    height: 10,
+    borderRadius: BorderRadius.full,
     overflow: 'hidden',
-    marginBottom: Spacing.md,
+    backgroundColor: Colors.surfaceSubtle,
+    marginTop: Spacing.md,
+    gap: 3,
   },
   progressSegment: {
     height: '100%',
+    borderRadius: BorderRadius.full,
+  },
+  progressEmpty: {
+    flex: 1,
+    backgroundColor: Colors.border,
   },
   pulseStatsRow: {
     flexDirection: 'row',
-    gap: Spacing.xs,
-    marginBottom: Spacing.md,
+    gap: Spacing.md,
+    marginTop: Spacing.lg,
   },
-  pulsePillBox: {
+  pulseMetric: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.md,
   },
+  pulseMetricDot: {
+    width: 8,
+    height: 28,
+    borderRadius: 4,
+  },
   pulseNum: {
-    ...Typography.titleSmall,
-    fontWeight: '800',
+    fontFamily: Fonts.extrabold,
+    fontSize: 22,
+    lineHeight: 27,
+    letterSpacing: -0.4,
   },
   pulseLbl: {
     ...Typography.caption,
-    fontSize: 10,
     color: Colors.textSecondary,
-    marginTop: 2,
   },
   openSheetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    paddingVertical: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: Spacing.md,
+    justifyContent: 'space-between',
+    marginTop: Spacing.lg,
+    paddingVertical: Spacing.md,
+    paddingLeft: Spacing.lg,
+    paddingRight: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primarySoft,
+    borderWidth: 1,
+    borderColor: Colors.primaryLight,
   },
   openSheetBtnText: {
-    ...Typography.caption,
+    fontFamily: Fonts.semibold,
+    fontSize: 14,
     color: Colors.primary,
-    fontWeight: '700',
-    fontSize: 12,
   },
-
-  // Sabak Highlight Card
-  openSabakBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+  openSheetArrow: {
+    width: 28,
+    height: 28,
     borderRadius: BorderRadius.full,
-  },
-  openSabakBtnText: {
-    ...Typography.caption,
-    color: '#D97706',
-    fontWeight: '700',
-  },
-  sabakMetricRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  sabakMetricCard: {
-    flex: 1,
-    backgroundColor: Colors.surfaceSubtle,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
-  },
-  sabakMetricVal: {
-    ...Typography.titleSmall,
-    fontWeight: '800',
-    color: Colors.text,
-    marginVertical: 4,
-  },
-  sabakMetricLbl: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    fontSize: 10,
-    textAlign: 'center',
+    justifyContent: 'center',
   },
 
-  // Groups Carousel
+  // Groups
   groupsSection: {
-    marginTop: Spacing.xs,
+    marginTop: Spacing.xxl,
   },
   groupsCarousel: {
     paddingHorizontal: Spacing.lg,
-    gap: Spacing.sm,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.md,
   },
-  groupCarouselCard: {
-    width: 170,
+  groupCard: {
+    width: GROUP_CARD_WIDTH,
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    padding: Spacing.lg,
     ...Shadows.sm,
   },
   groupCardHeader: {
-    marginBottom: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
   },
-  groupCardName: {
-    ...Typography.bodyMedium,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  groupAttendanceDone: {
+  groupStatus: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-  },
-  groupAttendanceDoneText: {
-    ...Typography.caption,
-    color: '#16A34A',
-    fontWeight: '700',
-    fontSize: 11,
-  },
-  groupAttendancePending: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
     borderRadius: BorderRadius.full,
   },
-  groupAttendancePendingText: {
-    ...Typography.caption,
-    color: '#D97706',
-    fontWeight: '700',
-    fontSize: 10,
+  groupStatusText: {
+    fontFamily: Fonts.semibold,
+    fontSize: 11,
+  },
+  groupCardName: {
+    ...Typography.titleSmall,
+    fontFamily: Fonts.bold,
   },
   groupCardFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    paddingTop: Spacing.xs,
   },
   studentCountWrap: {
     flexDirection: 'row',
@@ -968,54 +929,55 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   studentCountText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+    ...Typography.bodySmall,
+    fontFamily: Fonts.medium,
   },
 
-  // Revision Warning Card
-  revisionWarningCard: {
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.lg,
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FCD34D',
-    borderWidth: 1.5,
-  },
-  revisionRow: {
+  // Needs-improvement alert
+  alertCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.md,
+    marginTop: Spacing.xl,
+    padding: Spacing.lg,
+    paddingLeft: Spacing.lg + 4,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.warningLight,
+    ...Shadows.sm,
   },
-  revisionIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FEF3C7',
-    alignItems: 'center',
-    justifyContent: 'center',
+  alertAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderBottomLeftRadius: BorderRadius.lg,
+    backgroundColor: Colors.warning,
   },
-  revisionTextWrap: {
+  alertTextWrap: {
     flex: 1,
   },
-  revisionTitle: {
-    ...Typography.bodyMedium,
-    fontWeight: '700',
-    color: Colors.text,
+  alertTitle: {
+    ...Typography.titleSmall,
+    fontFamily: Fonts.bold,
+    fontSize: 15,
   },
-  revisionSubtitle: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+  alertSubtitle: {
+    ...Typography.bodySmall,
     marginTop: 2,
   },
   reviewBtn: {
-    backgroundColor: '#D97706',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md + 2,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.accentLight,
   },
   reviewBtnText: {
-    ...Typography.caption,
-    color: Colors.textInverse,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
+    fontSize: 13,
+    color: Colors.accentDark,
   },
-
 });

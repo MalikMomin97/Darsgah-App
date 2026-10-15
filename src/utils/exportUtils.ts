@@ -4,7 +4,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { StudentMonthlyReport, GroupMonthlyReport } from '../types';
 import { formatMonthYearDisplay } from './dateUtils';
-import { csvRow, escapeHtml as esc } from './exportFormat';
+import { escapeHtml as esc } from './exportFormat';
 import { gradeColor } from './performance';
 import { SettingsService } from '../services/settingsService';
 
@@ -15,46 +15,117 @@ const EXPORT_DIR_SETTING = 'export_directory_uri';
 export type ExportMode = 'download' | 'share';
 
 export type ExportResult =
-  | { status: 'saved'; fileName: string }
-  | { status: 'shared' }
-  | { status: 'cancelled' };
+  { status: 'saved'; fileName: string } | { status: 'shared' } | { status: 'cancelled' };
 
 interface ExportFile {
   /** Local file in the app cache. */
   uri: string;
   /** File name without extension. */
   name: string;
-  extension: 'pdf' | 'csv';
+  extension: 'pdf';
   mimeType: string;
   UTI: string;
 }
 
-const CELL = 'padding: 8px; border: 1px solid #ddd;';
-const CELL_C = `${CELL} text-align: center;`;
+const FONT_LINKS = `
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+`;
+
+/** Shared <head> content: fonts (with system fallbacks for offline use) and styles. */
+const head = (title: string) => `
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${title}</title>
+  ${FONT_LINKS}
+  <style>${BASE_CSS}</style>
+`;
 
 const BASE_CSS = `
-  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 24px; color: #1e293b; }
-  .header { text-align: center; border-bottom: 2px solid #0F5132; padding-bottom: 12px; margin-bottom: 20px; }
-  .institution { font-size: 24px; font-weight: bold; color: #0F5132; margin-bottom: 4px; }
-  .report-title { font-size: 16px; color: #475569; }
-  .section-title { font-size: 15px; font-weight: bold; color: #0F5132; margin-top: 18px; margin-bottom: 8px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
-  .table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12px; }
-  .table th { background: #0F5132; color: #ffffff; padding: 8px; border: 1px solid #0F5132; text-align: left; }
-  .grid { display: flex; gap: 10px; margin-bottom: 16px; }
-  .stat { flex: 1; background: #f1f5f9; border-radius: 6px; padding: 10px; text-align: center; }
-  .stat-num { font-size: 18px; font-weight: bold; color: #0f172a; margin-bottom: 2px; }
-  .stat-lbl { font-size: 11px; color: #64748b; }
-  .performance { display: flex; align-items: center; gap: 16px; background: #f1f5f9; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
-  .pct { font-size: 34px; font-weight: 800; }
-  .grade { display: inline-block; color: #fff; font-weight: 700; font-size: 13px; padding: 4px 12px; border-radius: 12px; }
-  .muted { font-size: 12px; color: #64748b; }
-  .remarks { font-size: 13px; line-height: 1.6; border-left: 3px solid #0F5132; padding: 8px 12px; background: #f8fafc; }
-  .footer { margin-top: 30px; border-top: 1px dashed #cbd5e1; padding-top: 12px; display: flex; justify-content: space-between; font-size: 12px; color: #64748b; }
+  @page { margin: 18mm 14mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Amiri', 'Noto Naskh Arabic', serif;
+    color: #16211D; background: #FFFFFF; font-size: 12.5px; line-height: 1.5;
+  }
+  .page { max-width: 760px; margin: 0 auto; }
+
+  /* Header band */
+  .header { background: #0E5C4A; background: linear-gradient(135deg, #0E5C4A 0%, #083D31 100%); color: #FFFFFF; text-align: center; padding: 26px 24px 22px; border-radius: 14px 14px 0 0; }
+  .crest { width: 40px; height: 40px; margin: 0 auto 10px; border: 1.5px solid #B8862B; border-radius: 50%; line-height: 37px; color: #B8862B; font-size: 18px; font-weight: 700; }
+  .institution { font-size: 24px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.25; }
+  .ornament { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0 10px; }
+  .ornament span { display: inline-block; width: 44px; height: 1px; background: #B8862B; }
+  .ornament i { display: inline-block; width: 6px; height: 6px; background: #B8862B; transform: rotate(45deg); }
+  .report-kind { font-size: 10.5px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: #F8EFDB; }
+  .report-title { font-size: 15px; font-weight: 600; margin-top: 3px; color: #FFFFFF; }
+  .gold-bar { height: 4px; background: #B8862B; margin-bottom: 22px; }
+
+  /* Metadata */
+  .meta { width: 100%; border-collapse: separate; border-spacing: 0; background: #FBFAF7; border: 1px solid #EAE5DA; border-radius: 12px; margin-bottom: 6px; }
+  .meta td { padding: 10px 16px; border-bottom: 1px solid #EAE5DA; width: 50%; vertical-align: top; }
+  .meta tr:last-child td { border-bottom: none; }
+  .meta td + td { border-left: 1px solid #EAE5DA; }
+  .meta .lbl { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #9AA29E; margin-bottom: 2px; }
+  .meta .val { font-size: 13.5px; font-weight: 700; color: #16211D; }
+
+  /* Section titles */
+  .section-title { display: flex; align-items: center; gap: 10px; font-size: 14.5px; font-weight: 700; color: #083D31; margin: 24px 0 12px; page-break-after: avoid; }
+  .section-title .num { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; background: #F8EFDB; color: #8C6420; font-size: 11px; font-weight: 800; }
+  .section-title .rule { flex: 1; height: 1px; background: #EAE5DA; }
+
+  /* Stat cards */
+  .grid { display: flex; gap: 10px; margin-bottom: 4px; }
+  .stat { flex: 1; background: #FBFAF7; border: 1px solid #EAE5DA; border-top: 3px solid #0E5C4A; border-radius: 12px; padding: 14px 10px 12px; text-align: center; }
+  .stat.present { background: #F3FAF6; border-top-color: #1F9D6B; }
+  .stat.absent { background: #FDF5F5; border-top-color: #D64545; }
+  .stat.gold { border-top-color: #B8862B; }
+  .stat-num { font-size: 24px; font-weight: 800; letter-spacing: -0.4px; color: #16211D; line-height: 1.15; }
+  .stat-lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #5B6661; margin-top: 4px; }
+
+  /* Performance */
+  .performance { position: relative; display: flex; align-items: center; gap: 22px; background: #FBFAF7; border: 1px solid #EAE5DA; border-left-width: 5px; border-radius: 12px; padding: 16px 20px; }
+  .pct { font-size: 38px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.1; }
+  .grade-lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #9AA29E; margin-bottom: 5px; }
+  .grade { display: inline-block; color: #FFFFFF; font-weight: 700; font-size: 13px; padding: 5px 14px; border-radius: 999px; }
+  .muted { font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6661; margin-top: 2px; }
+  .note { font-size: 12.5px; color: #5B6661; }
+  .remarks { font-size: 13px; line-height: 1.7; border-left: 3px solid #B8862B; padding: 12px 16px; background: #F8EFDB; border-radius: 0 10px 10px 0; color: #16211D; }
+
+  /* Tables */
+  .table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 16px; font-size: 12px; border: 1px solid #EAE5DA; border-radius: 12px; overflow: hidden; }
+  .table th { background: #0E5C4A; color: #FFFFFF; padding: 10px 12px; text-align: left; font-size: 9.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .table td { padding: 10px 12px; border-top: 1px solid #EAE5DA; }
+  .table tbody tr:nth-child(even) td { background: #FBFAF7; }
+  .table tr { page-break-inside: avoid; }
+  .table .c { text-align: center; }
+  .table .name { font-weight: 600; }
+  .table .strong { font-weight: 700; }
+  .tag { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+
+  /* Footer */
+  .footer { margin-top: 40px; border-top: 1px dashed #D9D1C2; padding-top: 16px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11.5px; color: #5B6661; page-break-inside: avoid; }
+  .footer .lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #9AA29E; }
+  .footer .date { font-weight: 600; color: #16211D; margin-top: 2px; }
+  .sign { text-align: center; min-width: 200px; }
+  .sign .line { border-top: 1px solid #9AA29E; margin-bottom: 6px; height: 30px; }
 `;
+
+const ORNAMENT = '<div class="ornament"><span></span><i></i><span></span></div>';
+
+/** First letter of the institution name for the header crest. */
+const crestLetter = (name: string) => esc((name.trim()[0] || 'D').toUpperCase());
 
 /** Safe file-name fragment from user data. */
 function fileSafe(value: string): string {
-  return value.trim().replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'report';
+  return (
+    value
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'report'
+  );
 }
 
 const pctText = (p: number | null) => (p === null ? '—' : `${p}%`);
@@ -90,7 +161,11 @@ async function writeToDirectory(directoryUri: string, file: ExportFile): Promise
  * Delivers a generated file: saved into a device folder (Android download) or via the share sheet.
  * iOS has no shared Downloads folder, so "download" uses the share sheet ("Save to Files").
  */
-async function deliver(file: ExportFile, mode: ExportMode, dialogTitle: string): Promise<ExportResult> {
+async function deliver(
+  file: ExportFile,
+  mode: ExportMode,
+  dialogTitle: string
+): Promise<ExportResult> {
   if (mode === 'download' && Platform.OS === 'android') {
     let directory = await getExportDirectory(false);
     if (!directory) return { status: 'cancelled' };
@@ -129,19 +204,6 @@ async function renderPdf(html: string, name: string): Promise<ExportFile> {
   return { uri, name, extension: 'pdf', mimeType: 'application/pdf', UTI: 'com.adobe.pdf' };
 }
 
-async function writeCsv(lines: string[], name: string): Promise<ExportFile> {
-  const uri = `${FileSystem.cacheDirectory}${name}.csv`;
-  // BOM so Excel opens Urdu/Arabic names correctly
-  await FileSystem.writeAsStringAsync(uri, '﻿' + lines.join('\n'));
-  return {
-    uri,
-    name,
-    extension: 'csv',
-    mimeType: 'text/csv',
-    UTI: 'public.comma-separated-values-text',
-  };
-}
-
 export const ExportUtils = {
   /**
    * PDF report for one student: attendance and learning performance.
@@ -160,52 +222,58 @@ export const ExportUtils = {
     const html = `
       <!DOCTYPE html>
       <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Student Monthly Report - ${esc(st.fullName)}</title>
-        <style>${BASE_CSS}</style>
-      </head>
+      <head>${head(`Student Monthly Report - ${esc(st.fullName)}`)}</head>
       <body>
-        <div class="header">
-          <div class="institution">${esc(institutionName)}</div>
-          <div class="report-title">Monthly Student Report • ${monthDisplay}</div>
-        </div>
-
-        <table class="table">
-          <tr><td style="${CELL}"><b>Student:</b> ${esc(st.fullName)}</td><td style="${CELL}"><b>Roll No:</b> ${esc(st.admissionNumber || 'N/A')}</td></tr>
-          <tr><td style="${CELL}"><b>Group:</b> ${esc(st.groupName || 'Unassigned')}</td><td style="${CELL}"><b>Guardian:</b> ${esc(st.guardianName || 'N/A')}</td></tr>
-        </table>
-
-        <div class="section-title">1. Attendance</div>
-        <div class="grid">
-          <div class="stat"><div class="stat-num" style="color: #0F5132;">${att.percentage}%</div><div class="stat-lbl">Attendance</div></div>
-          <div class="stat"><div class="stat-num" style="color: #16A34A;">${att.present}</div><div class="stat-lbl">Present</div></div>
-          <div class="stat"><div class="stat-num" style="color: #DC2626;">${att.absent}</div><div class="stat-lbl">Absent</div></div>
-          <div class="stat"><div class="stat-num" style="color: #F59E0B;">${att.late}</div><div class="stat-lbl">Late</div></div>
-          <div class="stat"><div class="stat-num" style="color: #6366F1;">${att.excused}</div><div class="stat-lbl">Excused</div></div>
-        </div>
-
-        <div class="section-title">2. Learning Performance</div>
-        <div class="performance">
-          <div style="text-align: center;">
-            <div class="pct" style="color: ${color};">${pctText(perf.learningPercentage)}</div>
-            <div class="muted">Learning</div>
+        <div class="page">
+          <div class="header">
+            <div class="crest">${crestLetter(institutionName)}</div>
+            <div class="institution">${esc(institutionName)}</div>
+            ${ORNAMENT}
+            <div class="report-kind">Monthly Student Report</div>
+            <div class="report-title">${monthDisplay}</div>
           </div>
-          <div>
-            ${
-              perf.grade
-                ? `<div class="grade" style="background: ${color};">${esc(perf.grade)}</div>`
-                : '<div class="muted">No lessons rated this month</div>'
-            }
+          <div class="gold-bar"></div>
+
+          <table class="meta">
+            <tr>
+              <td><span class="lbl">Student</span><span class="val">${esc(st.fullName)}</span></td>
+              <td><span class="lbl">Roll No</span><span class="val">${esc(st.admissionNumber || 'N/A')}</span></td>
+            </tr>
+            <tr>
+              <td><span class="lbl">Group</span><span class="val">${esc(st.groupName || 'Unassigned')}</span></td>
+              <td><span class="lbl">Guardian</span><span class="val">${esc(st.guardianName || 'N/A')}</span></td>
+            </tr>
+          </table>
+
+          <div class="section-title"><span class="num">1</span>Attendance<span class="rule"></span></div>
+          <div class="grid">
+            <div class="stat"><div class="stat-num" style="color: #0E5C4A;">${att.percentage}%</div><div class="stat-lbl">Attendance</div></div>
+            <div class="stat present"><div class="stat-num" style="color: #1F9D6B;">${att.present}</div><div class="stat-lbl">Present</div></div>
+            <div class="stat absent"><div class="stat-num" style="color: #D64545;">${att.absent}</div><div class="stat-lbl">Absent</div></div>
           </div>
-        </div>
 
-        <div class="section-title">3. Teacher's Remarks</div>
-        <div class="remarks">${esc(perf.remarks)}</div>
+          <div class="section-title"><span class="num">2</span>Learning Performance<span class="rule"></span></div>
+          <div class="performance" style="border-left-color: ${color};">
+            <div style="text-align: center; min-width: 96px;">
+              <div class="pct" style="color: ${color};">${pctText(perf.learningPercentage)}</div>
+              <div class="muted">Learning</div>
+            </div>
+            <div>
+              ${
+                perf.grade
+                  ? `<div class="grade-lbl">Grade</div><div class="grade" style="background: ${color};">${esc(perf.grade)}</div>`
+                  : '<div class="note">No lessons rated this month</div>'
+              }
+            </div>
+          </div>
 
-        <div class="footer">
-          <div>Report Generated on: ${esc(new Date().toLocaleDateString())}</div>
-          <div>Teacher Signature: _____________________</div>
+          <div class="section-title"><span class="num">3</span>Teacher's Remarks<span class="rule"></span></div>
+          <div class="remarks">${esc(perf.remarks)}</div>
+
+          <div class="footer">
+            <div><div class="lbl">Report Generated on</div><div class="date">${esc(new Date().toLocaleDateString())}</div></div>
+            <div class="sign"><div class="line"></div>Teacher Signature</div>
+          </div>
         </div>
       </body>
       </html>
@@ -230,11 +298,11 @@ export const ExportUtils = {
         const color = gradeColor(s.performance.grade);
         return `
         <tr>
-          <td style="${CELL}">${esc(s.student.fullName)}</td>
-          <td style="${CELL_C}">${esc(s.student.admissionNumber || '—')}</td>
-          <td style="${CELL_C} font-weight: bold; color: #0F5132;">${s.attendance.percentage}%</td>
-          <td style="${CELL_C} font-weight: bold; color: ${color};">${pctText(s.performance.learningPercentage)}</td>
-          <td style="${CELL_C} color: ${color};">${esc(s.performance.grade || 'Not rated')}</td>
+          <td class="name">${esc(s.student.fullName)}</td>
+          <td class="c">${esc(s.student.admissionNumber || '—')}</td>
+          <td class="c strong" style="color: #0E5C4A;">${s.attendance.percentage}%</td>
+          <td class="c strong" style="color: ${color};">${pctText(s.performance.learningPercentage)}</td>
+          <td class="c"><span class="tag" style="color: ${color}; background: ${color}1A;">${esc(s.performance.grade || 'Not rated')}</span></td>
         </tr>`;
       })
       .join('');
@@ -242,119 +310,50 @@ export const ExportUtils = {
     const html = `
       <!DOCTYPE html>
       <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Group Monthly Report - ${esc(report.group.name)}</title>
-        <style>${BASE_CSS}</style>
-      </head>
+      <head>${head(`Group Monthly Report - ${esc(report.group.name)}`)}</head>
       <body>
-        <div class="header">
-          <div class="institution">${esc(institutionName)}</div>
-          <div class="report-title">Group Monthly Report: ${esc(report.group.name)} • ${monthDisplay}</div>
-        </div>
+        <div class="page">
+          <div class="header">
+            <div class="crest">${crestLetter(institutionName)}</div>
+            <div class="institution">${esc(institutionName)}</div>
+            ${ORNAMENT}
+            <div class="report-kind">Group Monthly Report</div>
+            <div class="report-title">${esc(report.group.name)} • ${monthDisplay}</div>
+          </div>
+          <div class="gold-bar"></div>
 
-        <div class="grid">
-          <div class="stat"><div class="stat-num">${report.studentCount}</div><div class="stat-lbl">Active Students</div></div>
-          <div class="stat"><div class="stat-num">${report.averageAttendancePercentage}%</div><div class="stat-lbl">Average Attendance</div></div>
-          <div class="stat"><div class="stat-num">${pctText(report.averageLearningPercentage)}</div><div class="stat-lbl">Average Learning</div></div>
-        </div>
+          <div class="grid">
+            <div class="stat gold"><div class="stat-num">${report.studentCount}</div><div class="stat-lbl">Active Students</div></div>
+            <div class="stat"><div class="stat-num" style="color: #0E5C4A;">${report.averageAttendancePercentage}%</div><div class="stat-lbl">Average Attendance</div></div>
+            <div class="stat"><div class="stat-num" style="color: #0E5C4A;">${pctText(report.averageLearningPercentage)}</div><div class="stat-lbl">Average Learning</div></div>
+          </div>
 
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th style="text-align: center;">Roll No</th>
-              <th style="text-align: center;">Attendance</th>
-              <th style="text-align: center;">Learning</th>
-              <th style="text-align: center;">Status</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th class="c">Roll No</th>
+                <th class="c">Attendance</th>
+                <th class="c">Learning</th>
+                <th class="c">Status</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
 
-        <div class="footer">
-          <div>Generated on: ${esc(new Date().toLocaleDateString())}</div>
-          <div>Principal / Head Teacher Signature: _____________________</div>
+          <div class="footer">
+            <div><div class="lbl">Generated on</div><div class="date">${esc(new Date().toLocaleDateString())}</div></div>
+            <div class="sign"><div class="line"></div>Principal / Head Teacher Signature</div>
+          </div>
         </div>
       </body>
       </html>
     `;
 
-    const file = await renderPdf(html, `Group_Report_${fileSafe(report.group.name)}_${report.monthYear}`);
+    const file = await renderPdf(
+      html,
+      `Group_Report_${fileSafe(report.group.name)}_${report.monthYear}`
+    );
     return deliver(file, mode, `Group Report - ${report.group.name}`);
-  },
-
-  /**
-   * CSV export of one student's month.
-   */
-  async exportStudentReportToCsv(
-    report: StudentMonthlyReport,
-    mode: ExportMode = 'download'
-  ): Promise<ExportResult> {
-    const st = report.student;
-    const att = report.attendance;
-    const perf = report.performance;
-    const lines: string[] = [
-      csvRow(['Student Name', st.fullName]),
-      csvRow(['Admission No', st.admissionNumber || '']),
-      csvRow(['Group', st.groupName || '']),
-      csvRow(['Month', report.monthYear]),
-      '',
-      csvRow(['ATTENDANCE']),
-      csvRow(['Attendance %', 'Present', 'Absent', 'Late', 'Excused']),
-      csvRow([`${att.percentage}%`, att.present, att.absent, att.late, att.excused]),
-      '',
-      csvRow(['LEARNING PERFORMANCE']),
-      csvRow(['Learning %', 'Status']),
-      csvRow([pctText(perf.learningPercentage), perf.grade || 'Not rated']),
-      '',
-      csvRow(["TEACHER'S REMARKS"]),
-      csvRow([perf.remarks]),
-    ];
-
-    const file = await writeCsv(lines, `Report_${fileSafe(st.fullName)}_${report.monthYear}`);
-    return deliver(file, mode, `CSV - ${st.fullName}`);
-  },
-
-  /**
-   * CSV export of a group's month.
-   */
-  async exportGroupReportToCsv(
-    report: GroupMonthlyReport,
-    mode: ExportMode = 'download'
-  ): Promise<ExportResult> {
-    const lines: string[] = [
-      csvRow(['Group Name', report.group.name]),
-      csvRow(['Month', report.monthYear]),
-      csvRow(['Student Count', report.studentCount]),
-      csvRow(['Average Attendance', `${report.averageAttendancePercentage}%`]),
-      csvRow(['Average Learning', pctText(report.averageLearningPercentage)]),
-      '',
-      csvRow([
-        'Student Name',
-        'Roll No',
-        'Attendance %',
-        'Present',
-        'Absent',
-        'Learning %',
-        'Status',
-        "Teacher's Remarks",
-      ]),
-      ...report.studentSummaries.map((s) =>
-        csvRow([
-          s.student.fullName,
-          s.student.admissionNumber || '',
-          `${s.attendance.percentage}%`,
-          s.attendance.present,
-          s.attendance.absent,
-          pctText(s.performance.learningPercentage),
-          s.performance.grade || 'Not rated',
-          s.performance.remarks,
-        ])
-      ),
-    ];
-
-    const file = await writeCsv(lines, `Group_Report_${fileSafe(report.group.name)}_${report.monthYear}`);
-    return deliver(file, mode, `CSV - ${report.group.name}`);
   },
 };

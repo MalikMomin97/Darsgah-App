@@ -1,4 +1,5 @@
 import { AttendanceSummary, PerformanceSummary, Rating } from '../types';
+import { Colors } from '../config/theme';
 
 /** Score each daily rating contributes to the learning percentage. */
 export const RATING_SCORES: Record<Rating, number> = {
@@ -70,14 +71,14 @@ export function describePerformance(
 }
 
 const GRADE_COLORS: Record<Grade, string> = {
-  Excellent: '#16A34A',
-  'Very Good': '#0284C7',
-  Good: '#0F5132',
-  'Needs Improvement': '#D97706',
-  Weak: '#DC2626',
+  Excellent: Colors.success,
+  'Very Good': Colors.info,
+  Good: Colors.primary,
+  'Needs Improvement': Colors.warning,
+  Weak: Colors.danger,
 };
 
 /** Display color for a grade (muted grey when nothing was rated). */
 export function gradeColor(grade: Grade | null): string {
-  return grade ? GRADE_COLORS[grade] : '#94A3B8';
+  return grade ? GRADE_COLORS[grade] : Colors.textMuted;
 }

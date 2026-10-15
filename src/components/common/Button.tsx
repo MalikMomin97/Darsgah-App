@@ -1,15 +1,9 @@
 import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  ViewStyle,
-  TextStyle,
-  View,
-} from 'react-native';
+import { Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, BorderRadius, Typography } from '../../config/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Colors, Spacing, BorderRadius, Typography, Gradients, Shadows } from '../../config/theme';
+import { PressableScale } from './Motion';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'success';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -28,6 +22,19 @@ interface ButtonProps {
   fullWidth?: boolean;
 }
 
+const HEIGHT: Record<ButtonSize, number> = { sm: 38, md: 50, lg: 56 };
+const FONT_SIZE: Record<ButtonSize, number> = { sm: 13, md: 15, lg: 16 };
+const ICON_SIZE: Record<ButtonSize, number> = { sm: 15, md: 18, lg: 20 };
+
+const VARIANT: Record<ButtonVariant, { bg: string; fg: string; border?: string }> = {
+  primary: { bg: Colors.primary, fg: Colors.textInverse },
+  secondary: { bg: Colors.surfaceSubtle, fg: Colors.text },
+  outline: { bg: 'transparent', fg: Colors.primary, border: Colors.primary },
+  danger: { bg: Colors.danger, fg: Colors.textInverse },
+  ghost: { bg: 'transparent', fg: Colors.primary },
+  success: { bg: Colors.success, fg: Colors.textInverse },
+};
+
 export const Button: React.FC<ButtonProps> = ({
   title,
   onPress,
@@ -41,136 +48,82 @@ export const Button: React.FC<ButtonProps> = ({
   textStyle,
   fullWidth = false,
 }) => {
-  const getContainerStyle = (): ViewStyle => {
-    let base: ViewStyle = {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: BorderRadius.md,
-      alignSelf: fullWidth ? 'stretch' : 'auto',
-    };
+  const v = VARIANT[variant];
+  const inactive = disabled || loading;
+  const radius = size === 'sm' ? BorderRadius.sm : BorderRadius.md;
 
-    // Size
-    switch (size) {
-      case 'sm':
-        base.paddingVertical = Spacing.xs + 2;
-        base.paddingHorizontal = Spacing.md;
-        break;
-      case 'lg':
-        base.paddingVertical = Spacing.md + 2;
-        base.paddingHorizontal = Spacing.xl;
-        break;
-      case 'md':
-      default:
-        base.paddingVertical = Spacing.md;
-        base.paddingHorizontal = Spacing.lg;
-        break;
-    }
-
-    // Variant
-    switch (variant) {
-      case 'secondary':
-        base.backgroundColor = Colors.surfaceSubtle;
-        base.borderWidth = 1;
-        base.borderColor = Colors.borderDark;
-        break;
-      case 'outline':
-        base.backgroundColor = 'transparent';
-        base.borderWidth = 1.5;
-        base.borderColor = Colors.primary;
-        break;
-      case 'danger':
-        base.backgroundColor = Colors.danger;
-        break;
-      case 'success':
-        base.backgroundColor = Colors.success;
-        break;
-      case 'ghost':
-        base.backgroundColor = 'transparent';
-        break;
-      case 'primary':
-      default:
-        base.backgroundColor = Colors.primary;
-        break;
-    }
-
-    if (disabled || loading) {
-      base.opacity = 0.55;
-    }
-
-    return base;
-  };
-
-  const getTextColor = (): string => {
-    if (variant === 'outline' || variant === 'ghost') return Colors.primary;
-    if (variant === 'secondary') return Colors.text;
-    return Colors.textInverse;
-  };
-
-  const getFontSize = (): number => {
-    switch (size) {
-      case 'sm':
-        return 13;
-      case 'lg':
-        return 16;
-      case 'md':
-      default:
-        return 15;
-    }
-  };
-
-  const textColor = getTextColor();
-  const iconSize = size === 'sm' ? 16 : size === 'lg' ? 20 : 18;
+  const content = loading ? (
+    <ActivityIndicator color={v.fg} size="small" />
+  ) : (
+    <View style={styles.row}>
+      {icon && iconPosition === 'left' ? (
+        <Ionicons name={icon} size={ICON_SIZE[size]} color={v.fg} style={styles.iconLeft} />
+      ) : null}
+      <Text
+        style={[Typography.button, { color: v.fg, fontSize: FONT_SIZE[size] }, textStyle]}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
+      {icon && iconPosition === 'right' ? (
+        <Ionicons name={icon} size={ICON_SIZE[size]} color={v.fg} style={styles.iconRight} />
+      ) : null}
+    </View>
+  );
 
   return (
-    <TouchableOpacity
-      style={[getContainerStyle(), style]}
+    <PressableScale
       onPress={onPress}
-      disabled={disabled || loading}
-      activeOpacity={0.75}
+      disabled={inactive}
+      hapticOnPress
+      pressedScale={0.97}
+      style={[
+        styles.base,
+        {
+          minHeight: HEIGHT[size],
+          borderRadius: radius,
+          paddingHorizontal: size === 'sm' ? Spacing.md : Spacing.xl,
+          backgroundColor: v.bg,
+          alignSelf: fullWidth ? 'stretch' : 'auto',
+        },
+        v.border ? { borderWidth: 1.5, borderColor: v.border } : null,
+        variant === 'primary' && !inactive ? Shadows.md : null,
+        inactive ? styles.inactive : null,
+        style,
+      ]}
     >
-      {loading ? (
-        <ActivityIndicator color={textColor} size="small" style={styles.spinner} />
-      ) : (
-        <View style={styles.contentRow}>
-          {icon && iconPosition === 'left' ? (
-            <Ionicons
-              name={icon}
-              size={iconSize}
-              color={textColor}
-              style={{ marginRight: Spacing.xs }}
-            />
-          ) : null}
-          <Text
-            style={[
-              Typography.button,
-              { color: textColor, fontSize: getFontSize() },
-              textStyle,
-            ]}
-          >
-            {title}
-          </Text>
-          {icon && iconPosition === 'right' ? (
-            <Ionicons
-              name={icon}
-              size={iconSize}
-              color={textColor}
-              style={{ marginLeft: Spacing.xs }}
-            />
-          ) : null}
-        </View>
-      )}
-    </TouchableOpacity>
+      {variant === 'primary' ? (
+        <LinearGradient
+          colors={Gradients.brand}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
+        />
+      ) : null}
+      {content}
+    </PressableScale>
   );
 };
 
 const styles = StyleSheet.create({
-  contentRow: {
+  base: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  spinner: {
-    paddingVertical: 2,
+  iconLeft: {
+    marginRight: Spacing.sm,
+  },
+  iconRight: {
+    marginLeft: Spacing.sm,
+  },
+  inactive: {
+    opacity: 0.5,
   },
 });

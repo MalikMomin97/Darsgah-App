@@ -1,27 +1,21 @@
 import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
+import { Chip } from '../../components/common/Chip';
 import { Badge } from '../../components/common/Badge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { LoadingScreen } from '../../components/common/LoadingScreen';
-import { Colors, Spacing, Typography, BorderRadius } from '../../config/theme';
+import { FadeInView } from '../../components/common/Motion';
+import { Colors, Spacing, Typography, BorderRadius, Fonts } from '../../config/theme';
 import { Student, Group } from '../../types';
 import { StudentService } from '../../services/studentService';
 import { GroupService } from '../../services/groupService';
 import { useFocusEffect } from 'expo-router';
 import { useAppNavigation } from '../../navigation/appNavigation';
-
+import { avatarTone, initialsOf } from '../../utils/avatar';
 
 export const StudentListScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -60,48 +54,67 @@ export const StudentListScreen: React.FC = () => {
     }, [loadData])
   );
 
-  const renderStudentCard = ({ item }: { item: Student }) => (
-    <Card
-      style={styles.card}
-      onPress={() => navigation.navigate('StudentProfile', { studentId: item.id })}
-    >
-      <View style={styles.cardRow}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{item.fullName.charAt(0).toUpperCase()}</Text>
-        </View>
+  const renderStudentCard = ({ item, index }: { item: Student; index: number }) => {
+    const tone = avatarTone(item.fullName);
+    return (
+      <FadeInView index={index}>
+        <Card
+          style={styles.card}
+          onPress={() => navigation.navigate('StudentProfile', { studentId: item.id })}
+        >
+          <View style={styles.cardRow}>
+            <View style={[styles.avatar, { backgroundColor: tone.bg }]}>
+              <Text style={[styles.avatarText, { color: tone.fg }]}>
+                {initialsOf(item.fullName)}
+              </Text>
+            </View>
 
-        <View style={styles.infoCol}>
-          <View style={styles.nameRow}>
-            <Text style={styles.name} numberOfLines={1}>
-              {item.fullName}
-            </Text>
-            {item.isArchived ? (
-              <Badge type="archived" size="sm" />
-            ) : !item.isActive ? (
-              <Badge type="inactive" size="sm" />
-            ) : null}
+            <View style={styles.infoCol}>
+              <View style={styles.nameRow}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {item.fullName}
+                </Text>
+                {item.isArchived ? (
+                  <Badge type="archived" size="sm" />
+                ) : !item.isActive ? (
+                  <Badge type="inactive" size="sm" />
+                ) : null}
+              </View>
+
+              <View style={styles.detailsRow}>
+                {item.admissionNumber ? (
+                  <View style={styles.metaItem}>
+                    <Ionicons name="id-card-outline" size={12} color={Colors.textMuted} />
+                    <Text style={styles.metaText} numberOfLines={1}>
+                      Roll: {item.admissionNumber}
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={styles.metaItem}>
+                  <Ionicons name="layers-outline" size={12} color={Colors.textMuted} />
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    {item.groupName || 'No Group'}
+                  </Text>
+                </View>
+              </View>
+
+              {item.guardianName || item.contactPhone ? (
+                <Text style={styles.guardianText} numberOfLines={1}>
+                  {item.guardianName ? `Guardian: ${item.guardianName}` : ''}
+                  {item.guardianName && item.contactPhone ? '  •  ' : ''}
+                  {item.contactPhone || ''}
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={styles.chevronWrap}>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+            </View>
           </View>
-
-          <View style={styles.detailsRow}>
-            {item.admissionNumber ? (
-              <Text style={styles.metaText}>Roll: {item.admissionNumber} • </Text>
-            ) : null}
-            <Text style={styles.metaText}>{item.groupName || 'No Group'}</Text>
-          </View>
-
-          {item.guardianName || item.contactPhone ? (
-            <Text style={styles.guardianText} numberOfLines={1}>
-              {item.guardianName ? `Guardian: ${item.guardianName}` : ''}
-              {item.guardianName && item.contactPhone ? ' • ' : ''}
-              {item.contactPhone || ''}
-            </Text>
-          ) : null}
-        </View>
-
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-      </View>
-    </Card>
-  );
+        </Card>
+      </FadeInView>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -134,29 +147,19 @@ export const StudentListScreen: React.FC = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.pillsScroll}
         >
-          <TouchableOpacity
-            style={[styles.pill, selectedGroupId === null && styles.pillActive]}
+          <Chip
+            label="All Groups"
+            icon="apps-outline"
+            selected={selectedGroupId === null}
             onPress={() => setSelectedGroupId(null)}
-          >
-            <Text
-              style={[styles.pillText, selectedGroupId === null && styles.pillTextActive]}
-            >
-              All Groups
-            </Text>
-          </TouchableOpacity>
-
+          />
           {groups.map((g) => (
-            <TouchableOpacity
+            <Chip
               key={g.id}
-              style={[styles.pill, selectedGroupId === g.id && styles.pillActive]}
+              label={g.name}
+              selected={selectedGroupId === g.id}
               onPress={() => setSelectedGroupId(g.id)}
-            >
-              <Text
-                style={[styles.pillText, selectedGroupId === g.id && styles.pillTextActive]}
-              >
-                {g.name}
-              </Text>
-            </TouchableOpacity>
+            />
           ))}
         </ScrollView>
       </View>
@@ -166,17 +169,13 @@ export const StudentListScreen: React.FC = () => {
         <Text style={styles.countText}>
           {students.length} {students.length === 1 ? 'student' : 'students'} found
         </Text>
-        <TouchableOpacity
-          style={styles.archiveToggle}
+        <Chip
+          label="Show Archived"
+          icon={showArchived ? 'checkmark-circle' : 'archive-outline'}
+          selected={showArchived}
           onPress={() => setShowArchived((prev) => !prev)}
-        >
-          <Ionicons
-            name={showArchived ? 'checkbox' : 'square-outline'}
-            size={16}
-            color={Colors.primary}
-          />
-          <Text style={styles.archiveToggleText}>Show Archived</Text>
-        </TouchableOpacity>
+          style={styles.archiveChip}
+        />
       </View>
 
       {/* Student List */}
@@ -216,69 +215,39 @@ const styles = StyleSheet.create({
   },
   searchSection: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    backgroundColor: Colors.surface,
+    paddingTop: Spacing.xs,
   },
   searchInput: {
     marginBottom: 0,
   },
   pillsContainer: {
-    backgroundColor: Colors.surface,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingTop: Spacing.md,
   },
   pillsScroll: {
     paddingHorizontal: Spacing.lg,
-    gap: Spacing.xs,
-  },
-  pill: {
-    paddingVertical: 6,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  pillActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  pillText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  pillTextActive: {
-    color: Colors.textInverse,
-    fontWeight: '700',
+    gap: Spacing.sm,
   },
   subFilterBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   countText: {
-    ...Typography.caption,
+    ...Typography.overline,
     color: Colors.textSecondary,
-    fontWeight: '600',
   },
-  archiveToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  archiveToggleText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '600',
+  archiveChip: {
+    height: 32,
+    paddingHorizontal: Spacing.md,
   },
   listContent: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xs,
-    gap: Spacing.sm,
+    paddingBottom: Spacing.xxxl,
+    gap: Spacing.md,
   },
   card: {
     padding: Spacing.md,
@@ -289,44 +258,56 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   avatar: {
-    width: 44,
-    height: 44,
+    width: 50,
+    height: 50,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    ...Typography.titleMedium,
-    color: Colors.primary,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
+    fontSize: 17,
+    letterSpacing: 0.3,
   },
   infoCol: {
     flex: 1,
+    gap: 3,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
+    gap: Spacing.sm,
   },
   name: {
-    ...Typography.bodyLarge,
-    fontWeight: '700',
-    color: Colors.text,
-    flex: 1,
+    ...Typography.titleSmall,
+    fontFamily: Fonts.bold,
+    flexShrink: 1,
   },
   detailsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
+    flexWrap: 'wrap',
+    columnGap: Spacing.md,
+    rowGap: 2,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   metaText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+    ...Typography.bodySmall,
+    fontFamily: Fonts.medium,
   },
   guardianText: {
     ...Typography.caption,
-    color: Colors.textMuted,
+  },
+  chevronWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

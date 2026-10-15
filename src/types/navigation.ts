@@ -33,6 +33,7 @@ export type RootStackParamList = {
   // Settings & System
   Settings: undefined;
   BackupRestore: undefined;
+  About: undefined;
 };
 
 export type RouteName = keyof RootStackParamList;

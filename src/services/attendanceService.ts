@@ -1,8 +1,9 @@
-import { executeRun, queryAll, withDbTransaction } from '../db/database';
+import { executeRun, queryAll, queryFirst, withDbTransaction } from '../db/database';
 import {
   AttendanceRecord,
   AttendanceStatus,
   AttendanceSummary,
+  Holiday,
   Student,
 } from '../types';
 import { AttendanceRecordRow, StudentRow } from '../types/database';
@@ -84,6 +85,9 @@ export const AttendanceService = {
     groupId: string,
     entries: { studentId: string; status: AttendanceStatus; notes?: string | null }[]
   ): Promise<void> {
+    if (await this.getHoliday(date)) {
+      throw new Error('The darsgah is marked off on this day, so attendance cannot be saved.');
+    }
     const now = new Date().toISOString();
 
     await withDbTransaction(async () => {
@@ -180,29 +184,7 @@ export const AttendanceService = {
       endDate,
     ]);
 
-    let present = 0;
-    let absent = 0;
-    let late = 0;
-    let excused = 0;
-
-    rows.forEach((r) => {
-      if (r.status === 'present') present = r.count;
-      if (r.status === 'absent') absent = r.count;
-      if (r.status === 'late') late = r.count;
-      if (r.status === 'excused') excused = r.count;
-    });
-
-    const totalDays = present + absent + late + excused;
-    const percentage = totalDays > 0 ? Math.round(((present + late * 0.5) / totalDays) * 100) : 0;
-
-    return {
-      totalDays,
-      present,
-      absent,
-      late,
-      excused,
-      percentage,
-    };
+    return summarize(rows);
   },
 
   /**
@@ -225,28 +207,58 @@ export const AttendanceService = {
       endDate,
     ]);
 
-    let present = 0;
-    let absent = 0;
-    let late = 0;
-    let excused = 0;
+    return summarize(rows);
+  },
 
-    rows.forEach((r) => {
-      if (r.status === 'present') present = r.count;
-      if (r.status === 'absent') absent = r.count;
-      if (r.status === 'late') late = r.count;
-      if (r.status === 'excused') excused = r.count;
+  /** Returns the darsgah-off entry for a date, or null on a normal working day. */
+  async getHoliday(date: string): Promise<Holiday | null> {
+    return queryFirst<Holiday>('SELECT date, reason FROM holidays WHERE date = ?;', [date]);
+  },
+
+  /** Number of darsgah-off days in a date range (inclusive). */
+  async countHolidays(startDate: string, endDate: string): Promise<number> {
+    const row = await queryFirst<{ count: number }>(
+      'SELECT COUNT(*) AS count FROM holidays WHERE date >= ? AND date <= ?;',
+      [startDate, endDate]
+    );
+    return row?.count ?? 0;
+  },
+
+  /** Number of attendance marks saved on a date across all groups. */
+  async countMarksOnDate(date: string): Promise<number> {
+    const row = await queryFirst<{ count: number }>(
+      'SELECT COUNT(*) AS count FROM attendance_records WHERE date = ?;',
+      [date]
+    );
+    return row?.count ?? 0;
+  },
+
+  /**
+   * Marks the whole darsgah off on a date. Attendance already saved for that date is
+   * removed so the day does not count towards any student's attendance.
+   */
+  async markHoliday(date: string, reason: string | null): Promise<void> {
+    const now = new Date().toISOString();
+    await withDbTransaction(async () => {
+      await executeRun(
+        `INSERT INTO holidays (date, reason, created_at, updated_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(date) DO UPDATE SET reason = excluded.reason, updated_at = excluded.updated_at;`,
+        [date, reason?.trim() || null, now, now]
+      );
+      await executeRun('DELETE FROM attendance_records WHERE date = ?;', [date]);
     });
+  },
 
-    const totalDays = present + absent + late + excused;
-    const percentage = totalDays > 0 ? Math.round(((present + late * 0.5) / totalDays) * 100) : 0;
-
-    return {
-      totalDays,
-      present,
-      absent,
-      late,
-      excused,
-      percentage,
-    };
+  /** Turns a darsgah-off day back into a normal working day. */
+  async removeHoliday(date: string): Promise<void> {
+    await executeRun('DELETE FROM holidays WHERE date = ?;', [date]);
   },
 };
+
+function summarize(rows: { status: string; count: number }[]): AttendanceSummary {
+  const present = rows.find((r) => r.status === 'present')?.count ?? 0;
+  const absent = rows.find((r) => r.status === 'absent')?.count ?? 0;
+  const totalDays = present + absent;
+  const percentage = totalDays > 0 ? Math.round((present / totalDays) * 100) : 0;
+  return { totalDays, present, absent, percentage };
+}

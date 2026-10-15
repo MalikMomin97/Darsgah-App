@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../config/theme';
+import { Colors, Spacing, BorderRadius, Typography, Shadows, Fonts } from '../../config/theme';
+import { PressableScale } from './Motion';
 
 interface StatCardProps {
   title: string;
@@ -14,6 +15,7 @@ interface StatCardProps {
   style?: ViewStyle;
 }
 
+/** Compact metric tile: tinted icon, large number, label. */
 export const StatCard: React.FC<StatCardProps> = ({
   title,
   value,
@@ -26,19 +28,15 @@ export const StatCard: React.FC<StatCardProps> = ({
 }) => {
   const content = (
     <View style={[styles.container, style]}>
-      <View style={styles.topRow}>
-        <View style={[styles.iconWrapper, { backgroundColor: bgColor }]}>
-          <Ionicons name={icon} size={22} color={color} />
-        </View>
-        <Text style={styles.value} numberOfLines={1}>
-          {value}
-        </Text>
+      <View style={[styles.iconWrapper, { backgroundColor: bgColor }]}>
+        <Ionicons name={icon} size={18} color={color} />
       </View>
-
+      <Text style={styles.value} numberOfLines={1}>
+        {value}
+      </Text>
       <Text style={styles.title} numberOfLines={1}>
         {title}
       </Text>
-
       {subtitle ? (
         <Text style={styles.subtitle} numberOfLines={1}>
           {subtitle}
@@ -49,13 +47,9 @@ export const StatCard: React.FC<StatCardProps> = ({
 
   if (onPress) {
     return (
-      <TouchableOpacity
-        onPress={onPress}
-        activeOpacity={0.7}
-        style={styles.touchable}
-      >
+      <PressableScale onPress={onPress} style={styles.touchable}>
         {content}
-      </TouchableOpacity>
+      </PressableScale>
     );
   }
 
@@ -70,38 +64,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
+    padding: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
     ...Shadows.sm,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
-  },
   iconWrapper: {
-    width: 38,
-    height: 38,
-    borderRadius: BorderRadius.md,
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Spacing.md,
   },
   value: {
-    ...Typography.titleLarge,
-    fontWeight: '800',
+    fontFamily: Fonts.extrabold,
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: -0.5,
     color: Colors.text,
   },
   title: {
-    ...Typography.bodySmall,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
+    fontSize: 12.5,
     color: Colors.textSecondary,
     marginTop: 2,
   },
   subtitle: {
     ...Typography.caption,
-    color: Colors.textMuted,
     marginTop: 2,
   },
 });

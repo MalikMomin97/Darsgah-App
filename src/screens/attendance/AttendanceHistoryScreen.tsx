@@ -1,18 +1,23 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, ScrollView, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
+import { Chip } from '../../components/common/Chip';
+import { SectionHeader } from '../../components/common/SectionHeader';
 import { EmptyState } from '../../components/common/EmptyState';
-import { Colors, Spacing, Typography, BorderRadius } from '../../config/theme';
+import { FadeInView } from '../../components/common/Motion';
+import {
+  Colors,
+  Spacing,
+  Typography,
+  BorderRadius,
+  Fonts,
+  Gradients,
+  Shadows,
+} from '../../config/theme';
 import { AttendanceRecord, AttendanceSummary, Student } from '../../types';
 import { AttendanceService } from '../../services/attendanceService';
 import { StudentService } from '../../services/studentService';
@@ -24,6 +29,82 @@ import {
   formatMonthYearDisplay,
 } from '../../utils/dateUtils';
 import { useAppNavigation, useAppRoute } from '../../navigation/appNavigation';
+
+const RING_SIZE = 104;
+const RING_WIDTH = 9;
+
+/** Circular progress ring drawn with plain Views (two clipped, rotated half-rings). */
+const ProgressRing: React.FC<{
+  percent: number;
+  size: number;
+  width: number;
+  color: string;
+  trackColor: string;
+  children?: React.ReactNode;
+}> = ({ percent, size, width, color, trackColor, children }) => {
+  const p = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
+  const rightDeg = -135 + (Math.min(p, 50) / 50) * 180;
+  const leftDeg = 45 + (Math.max(p - 50, 0) / 50) * 180;
+  const half = size / 2;
+  const arc = {
+    width: size,
+    height: size,
+    borderRadius: half,
+    borderWidth: width,
+    borderTopColor: color,
+    borderRightColor: color,
+    borderBottomColor: 'transparent',
+    borderLeftColor: 'transparent',
+    position: 'absolute' as const,
+    top: 0,
+  };
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: half,
+          borderWidth: width,
+          borderColor: trackColor,
+        }}
+      />
+      {p > 0 ? (
+        <View
+          style={{
+            position: 'absolute',
+            left: half,
+            width: half,
+            height: size,
+            overflow: 'hidden',
+          }}
+        >
+          <View style={[arc, { left: -half, transform: [{ rotate: `${rightDeg}deg` }] }]} />
+        </View>
+      ) : null}
+      {p > 50 ? (
+        <View
+          style={{ position: 'absolute', left: 0, width: half, height: size, overflow: 'hidden' }}
+        >
+          <View style={[arc, { left: 0, transform: [{ rotate: `${leftDeg}deg` }] }]} />
+        </View>
+      ) : null}
+      <View style={[StyleSheet.absoluteFill, styles.ringCenter]}>{children}</View>
+    </View>
+  );
+};
+
+function dateParts(dateStr: string): { day: string; weekday: string } {
+  const [y, m, d] = dateStr.split('-').map((n) => parseInt(n, 10));
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  if (isNaN(dt.getTime())) return { day: '', weekday: '' };
+  return {
+    day: String(dt.getDate()),
+    weekday: dt.toLocaleDateString(undefined, { weekday: 'short' }),
+  };
+}
 
 export const AttendanceHistoryScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -37,8 +118,6 @@ export const AttendanceHistoryScreen: React.FC = () => {
     totalDays: 0,
     present: 0,
     absent: 0,
-    late: 0,
-    excused: 0,
     percentage: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -69,21 +148,47 @@ export const AttendanceHistoryScreen: React.FC = () => {
     (async () => await loadData())();
   }, [loadData]);
 
-  const renderAttendanceItem = ({ item }: { item: AttendanceRecord }) => (
-    <Card style={styles.recordCard}>
-      <View style={styles.recordRow}>
-        <View style={styles.dateCol}>
-          <Text style={styles.dateText}>{formatDateDisplay(item.date)}</Text>
-          <Text style={styles.groupText}>{item.groupName || 'Darsgah'}</Text>
-        </View>
+  const renderAttendanceItem = ({ item, index }: { item: AttendanceRecord; index: number }) => {
+    const isPresent = item.status === 'present';
+    const { day, weekday } = dateParts(item.date);
+    return (
+      <FadeInView index={index}>
+        <Card style={styles.recordCard} padding="md">
+          <View style={styles.recordRow}>
+            <View
+              style={[
+                styles.dayTile,
+                { backgroundColor: isPresent ? Colors.presentBg : Colors.absentBg },
+              ]}
+            >
+              <Text
+                style={[styles.dayTileNum, { color: isPresent ? Colors.present : Colors.absent }]}
+              >
+                {day}
+              </Text>
+              <Text style={styles.dayTileWeek}>{weekday}</Text>
+            </View>
 
-        <Badge type={item.status} />
-      </View>
-      {item.notes ? (
-        <Text style={styles.notesText}>Note: {item.notes}</Text>
-      ) : null}
-    </Card>
-  );
+            <View style={styles.dateCol}>
+              <Text style={styles.dateText}>{formatDateDisplay(item.date)}</Text>
+              <View style={styles.groupRow}>
+                <Ionicons name="people-outline" size={12} color={Colors.textMuted} />
+                <Text style={styles.groupText}>{item.groupName || 'Darsgah'}</Text>
+              </View>
+            </View>
+
+            <Badge type={item.status} />
+          </View>
+          {item.notes ? (
+            <View style={styles.notesRow}>
+              <Ionicons name="document-text-outline" size={13} color={Colors.textMuted} />
+              <Text style={styles.notesText}>Note: {item.notes}</Text>
+            </View>
+          ) : null}
+        </Card>
+      </FadeInView>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -93,35 +198,24 @@ export const AttendanceHistoryScreen: React.FC = () => {
         onBack={() => navigation.goBack()}
       />
 
-      {/* Month Selector Carousel */}
-      <View style={styles.monthBar}>
+      {/* Month Selector Chips */}
+      <View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.monthScroll}
         >
           {monthOptions.map((opt) => (
-            <TouchableOpacity
+            <Chip
               key={opt.value}
-              style={[
-                styles.monthChip,
-                selectedMonthYear === opt.value && styles.monthChipActive,
-              ]}
+              label={opt.label}
+              selected={selectedMonthYear === opt.value}
               onPress={() => {
                 if (opt.value === selectedMonthYear) return;
                 setLoading(true);
                 setSelectedMonthYear(opt.value);
               }}
-            >
-              <Text
-                style={[
-                  styles.monthChipText,
-                  selectedMonthYear === opt.value && styles.monthChipTextActive,
-                ]}
-              >
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
+            />
           ))}
         </ScrollView>
       </View>
@@ -139,56 +233,63 @@ export const AttendanceHistoryScreen: React.FC = () => {
         }}
         ListHeaderComponent={
           <View style={styles.headerBlock}>
-            {/* Monthly Summary Metric Card */}
-            <Card style={styles.summaryCard}>
-              <View style={styles.summaryTop}>
-                <View>
-                  <Text style={styles.monthTitle}>
-                    {formatMonthYearDisplay(selectedMonthYear)}
-                  </Text>
-                  <Text style={styles.monthSub}>
-                    {summary.totalDays} Total Recorded Days
-                  </Text>
+            {/* Monthly Summary Hero */}
+            <FadeInView style={styles.heroShadow}>
+              <LinearGradient
+                colors={Gradients.brand}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.hero}
+              >
+                <View style={styles.heroTop}>
+                  <View style={styles.heroTitleCol}>
+                    <Text style={styles.heroOverline}>Monthly Summary</Text>
+                    <Text style={styles.monthTitle}>
+                      {formatMonthYearDisplay(selectedMonthYear)}
+                    </Text>
+                    <View style={styles.daysPill}>
+                      <Ionicons name="calendar-outline" size={13} color={Colors.accentLight} />
+                      <Text style={styles.monthSub}>{summary.totalDays} Total Recorded Days</Text>
+                    </View>
+                  </View>
+
+                  <ProgressRing
+                    percent={summary.percentage}
+                    size={RING_SIZE}
+                    width={RING_WIDTH}
+                    color={Colors.accent}
+                    trackColor={Colors.primaryMuted}
+                  >
+                    <Text style={styles.percentageText}>{summary.percentage}%</Text>
+                    <Text style={styles.percentageLabel}>Attendance</Text>
+                  </ProgressRing>
                 </View>
 
-                <View style={styles.percentageCircle}>
-                  <Text style={styles.percentageText}>{summary.percentage}%</Text>
-                  <Text style={styles.percentageLabel}>Attendance</Text>
+                <View style={styles.metricsRow}>
+                  <View style={styles.metricItem}>
+                    <View style={styles.metricHead}>
+                      <View style={[styles.metricDot, { backgroundColor: Colors.present }]} />
+                      <Text style={styles.metricLbl}>Present</Text>
+                    </View>
+                    <Text style={styles.metricVal}>{summary.present}</Text>
+                  </View>
+                  <View style={styles.divider} />
+                  <View style={styles.metricItem}>
+                    <View style={styles.metricHead}>
+                      <View style={[styles.metricDot, { backgroundColor: Colors.absent }]} />
+                      <Text style={styles.metricLbl}>Absent</Text>
+                    </View>
+                    <Text style={styles.metricVal}>{summary.absent}</Text>
+                  </View>
                 </View>
-              </View>
+              </LinearGradient>
+            </FadeInView>
 
-              <View style={styles.metricsRow}>
-                <View style={styles.metricItem}>
-                  <Text style={[styles.metricVal, { color: Colors.present }]}>
-                    {summary.present}
-                  </Text>
-                  <Text style={styles.metricLbl}>Present</Text>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.metricItem}>
-                  <Text style={[styles.metricVal, { color: Colors.absent }]}>
-                    {summary.absent}
-                  </Text>
-                  <Text style={styles.metricLbl}>Absent</Text>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.metricItem}>
-                  <Text style={[styles.metricVal, { color: Colors.late }]}>
-                    {summary.late}
-                  </Text>
-                  <Text style={styles.metricLbl}>Late</Text>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.metricItem}>
-                  <Text style={[styles.metricVal, { color: Colors.excused }]}>
-                    {summary.excused}
-                  </Text>
-                  <Text style={styles.metricLbl}>Excused</Text>
-                </View>
-              </View>
-            </Card>
-
-            <Text style={styles.sectionHeaderTitle}>Daily History</Text>
+            <SectionHeader
+              title="Daily History"
+              meta={records.length > 0 ? `${records.length} days` : undefined}
+              style={styles.sectionHeader}
+            />
           </View>
         }
         ListEmptyComponent={
@@ -208,135 +309,183 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  monthBar: {
-    backgroundColor: Colors.surface,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
   monthScroll: {
     paddingHorizontal: Spacing.lg,
-    gap: Spacing.xs,
-  },
-  monthChip: {
-    paddingVertical: 6,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  monthChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  monthChipText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  monthChipTextActive: {
-    color: Colors.textInverse,
-    fontWeight: '700',
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   listContent: {
-    padding: Spacing.lg,
-    gap: Spacing.xs,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xxxl,
+    gap: Spacing.sm,
   },
   headerBlock: {
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.xs,
   },
-  summaryCard: {
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
+
+  // Hero
+  heroShadow: {
+    borderRadius: BorderRadius.xl,
+    marginBottom: Spacing.xxl,
+    ...Shadows.md,
   },
-  summaryTop: {
+  hero: {
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    overflow: 'hidden',
+  },
+  heroTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  heroTitleCol: {
+    flex: 1,
+  },
+  heroOverline: {
+    ...Typography.overline,
+    color: Colors.accentLight,
+    marginBottom: Spacing.xs,
   },
   monthTitle: {
-    ...Typography.titleMedium,
-    color: Colors.text,
+    ...Typography.titleLarge,
+    color: Colors.textInverse,
+  },
+  daysPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    marginTop: Spacing.md,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primaryDeep,
   },
   monthSub: {
     ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
+    fontFamily: Fonts.semibold,
+    color: Colors.primaryLight,
   },
-  percentageCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.primaryLight,
+  ringCenter: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   percentageText: {
-    ...Typography.titleSmall,
-    fontWeight: '800',
-    color: Colors.primary,
+    fontFamily: Fonts.extrabold,
+    fontSize: 24,
+    lineHeight: 29,
+    letterSpacing: -0.6,
+    color: Colors.textInverse,
   },
   percentageLabel: {
     ...Typography.caption,
-    fontSize: 9,
-    color: Colors.primaryDark,
+    fontSize: 9.5,
+    lineHeight: 12,
+    color: Colors.accentLight,
   },
   metricsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderColor: Colors.border,
-    paddingTop: Spacing.md,
+    marginTop: Spacing.xl,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.primaryDeep,
   },
   metricItem: {
+    flex: 1,
     alignItems: 'center',
   },
+  metricHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metricDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
   metricVal: {
-    ...Typography.titleSmall,
-    fontWeight: '800',
+    fontFamily: Fonts.extrabold,
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: -0.4,
+    color: Colors.textInverse,
+    marginTop: 2,
   },
   metricLbl: {
     ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
+    color: Colors.primaryLight,
   },
   divider: {
     width: 1,
-    height: 28,
-    backgroundColor: Colors.border,
+    height: 32,
+    backgroundColor: Colors.primaryMuted,
   },
-  sectionHeaderTitle: {
-    ...Typography.titleSmall,
-    color: Colors.text,
+  sectionHeader: {
     marginBottom: Spacing.xs,
   },
-  recordCard: {
-    marginBottom: Spacing.xs,
-    padding: Spacing.md,
-  },
+
+  // Daily rows
+  recordCard: {},
   recordRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.md,
   },
-  dateCol: {},
+  dayTile: {
+    width: 48,
+    height: 52,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayTileNum: {
+    fontFamily: Fonts.extrabold,
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  dayTileWeek: {
+    ...Typography.caption,
+    fontSize: 10,
+    lineHeight: 13,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  dateCol: {
+    flex: 1,
+  },
   dateText: {
-    ...Typography.bodyLarge,
-    fontWeight: '600',
-    color: Colors.text,
+    ...Typography.titleSmall,
+    fontSize: 15,
+  },
+  groupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 3,
   },
   groupText: {
     ...Typography.caption,
     color: Colors.textSecondary,
-    marginTop: 2,
+  },
+  notesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: Spacing.md,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
   notesText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: Spacing.xs,
+    ...Typography.bodySmall,
     fontStyle: 'italic',
+    flex: 1,
   },
 });

@@ -6,12 +6,94 @@ import {
   DEFAULT_BOOK_SECTIONS,
   DEFAULT_QURAN_PAGES_PER_PARA,
 } from './trackSeeds';
-import { DEFAULT_BOOKS } from './bookSeeds';
+import { DEFAULT_BOOKS, PARA_NAMES, QAIDA_CHAPTER, SURAH_NAMES } from './bookSeeds';
+import { LEGACY_PARA_TITLES, LEGACY_SURAH_TITLES } from './legacyBookTitles';
 
 export interface Migration {
   version: number;
   name: string;
   up: (db: SQLiteDatabase) => Promise<void>;
+}
+
+/**
+ * Brings the default books' chapters up to date: Qaida as a single chapter, Arabic para
+ * names, and all 114 surahs with Arabic names. Idempotent, so it can safely run again.
+ */
+async function syncDefaultBookChapters(db: SQLiteDatabase): Promise<void> {
+  // Only touches the default books (matched by title) and their seeded chapters.
+  // Chapters are archived rather than deleted so recorded ratings are kept.
+  const now = new Date().toISOString();
+  const findBook = (title: string) =>
+    db.getFirstAsync<{ id: string }>('SELECT id FROM books WHERE title = ?;', [title]);
+  const activeChapters = (bookId: string) =>
+    db.getAllAsync<{ id: string; title: string }>(
+      'SELECT id, title FROM chapters WHERE book_id = ? AND is_archived = 0 ORDER BY sort_order;',
+      [bookId]
+    );
+  const insertChapter = (bookId: string, title: string, sortOrder: number) =>
+    db.runAsync(
+      `INSERT INTO chapters (id, book_id, title, sort_order, is_archived, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 0, ?, ?);`,
+      [generateId(), bookId, title, sortOrder, now, now]
+    );
+
+  // 1. Qaida: replace 'Lesson N' chapters with a single chapter for the whole book
+  const qaida = await findBook('Qaida');
+  if (qaida) {
+    const chapters = await activeChapters(qaida.id);
+    const lessons = chapters.filter((c) => /^Lesson \d+$/.test(c.title));
+    if (lessons.length > 0) {
+      for (const c of lessons) {
+        await db.runAsync('UPDATE chapters SET is_archived = 1, updated_at = ? WHERE id = ?;', [
+          now,
+          c.id,
+        ]);
+      }
+      if (!chapters.some((c) => c.title === QAIDA_CHAPTER)) {
+        await insertChapter(qaida.id, QAIDA_CHAPTER, 0);
+      }
+    }
+  }
+
+  // 2. Quran (Nazira): 'Para N' or the English name -> the para's Arabic name
+  const quran = await findBook('Quran (Nazira)');
+  if (quran) {
+    for (let i = 0; i < PARA_NAMES.length; i++) {
+      await db.runAsync(
+        'UPDATE chapters SET title = ?, updated_at = ? WHERE book_id = ? AND title IN (?, ?);',
+        [PARA_NAMES[i], now, quran.id, `Para ${i + 1}`, LEGACY_PARA_TITLES[i]]
+      );
+    }
+  }
+
+  // 3. Surah (Hifz): all 114 surahs in mushaf order with Arabic names (existing English
+  //    titles are renamed in place); extra custom chapters go last
+  const surah = await findBook('Surah (Hifz)');
+  if (surah) {
+    const chapters = await activeChapters(surah.id);
+    const byTitle = new Map(chapters.map((c) => [c.title, c.id]));
+    const matched = new Set<string>();
+    for (let i = 0; i < SURAH_NAMES.length; i++) {
+      const id = byTitle.get(SURAH_NAMES[i]) ?? byTitle.get(LEGACY_SURAH_TITLES[i]);
+      if (id) {
+        matched.add(id);
+        await db.runAsync(
+          'UPDATE chapters SET title = ?, sort_order = ?, updated_at = ? WHERE id = ?;',
+          [SURAH_NAMES[i], i + 1, now, id]
+        );
+      } else {
+        await insertChapter(surah.id, SURAH_NAMES[i], i + 1);
+      }
+    }
+    const extras = chapters.filter((c) => !matched.has(c.id));
+    for (let i = 0; i < extras.length; i++) {
+      await db.runAsync('UPDATE chapters SET sort_order = ?, updated_at = ? WHERE id = ?;', [
+        SURAH_NAMES.length + i + 1,
+        now,
+        extras[i].id,
+      ]);
+    }
+  }
 }
 
 export const migrations: Migration[] = [
@@ -403,6 +485,38 @@ export const migrations: Migration[] = [
           ]);
         }
       }
+    },
+  },
+  {
+    version: 4,
+    name: 'default_book_chapters_v4',
+    up: syncDefaultBookChapters,
+  },
+  {
+    // Re-run: devices that applied an earlier v4 still had English para/surah names.
+    version: 5,
+    name: 'arabic_book_chapters_v5',
+    up: syncDefaultBookChapters,
+  },
+  {
+    version: 6,
+    name: 'holidays_and_two_status_attendance_v6',
+    up: async (db: SQLiteDatabase) => {
+      // Days the whole darsgah is off: no attendance is taken, so they never count
+      // towards any student's attendance percentage.
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS holidays (
+          date TEXT PRIMARY KEY,
+          reason TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      // Attendance is now only Present / Absent
+      await db.execAsync(`
+        UPDATE attendance_records SET status = 'present' WHERE status = 'late';
+        UPDATE attendance_records SET status = 'absent' WHERE status = 'excused';
+      `);
     },
   },
 ];
