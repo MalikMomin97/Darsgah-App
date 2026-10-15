@@ -1,15 +1,18 @@
 {
   "expo": {
-    "name": "Drsgh",
-    "slug": "Drsgh",
+    "name": "Darsgah",
+    "slug": "darsgah",
+    "scheme": "darsgah",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.darsgah.app"
     },
     "android": {
+      "package": "com.darsgah.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +23,18 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-sharing",
+      "expo-font",
+      "expo-router"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e5a4f038-3f2e-4809-8217-eaefdd33c1f0"
+      }
+    },
+    "owner": "malikmomin"
   }
 }
