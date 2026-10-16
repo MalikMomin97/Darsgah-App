@@ -49,7 +49,10 @@ export const Input: React.FC<InputProps> = ({
         </View>
       ) : null}
 
+      {/* Focus only recolours the wrapper: toggling elevation/shadow here re-creates the native
+          view on Android, which blurs the TextInput as soon as it gains focus. */}
       <View
+        collapsable={false}
         style={[
           styles.inputWrapper,
           focused && styles.inputWrapperFocused,
@@ -134,11 +137,6 @@ const styles = StyleSheet.create({
   inputWrapperFocused: {
     borderColor: Colors.primary,
     backgroundColor: Colors.surface,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 2,
   },
   inputWrapperError: {
     borderColor: Colors.danger,
