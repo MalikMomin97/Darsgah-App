@@ -29,7 +29,7 @@ export const BackupService = {
 
     const sourcePath = info.exists ? dbPath : `${FileSystem.documentDirectory}${DATABASE_NAME}`;
     const today = getTodayDateString();
-    const backupFileName = `darsgah_backup_${today}.db`;
+    const backupFileName = `darsgah_tracker_backup_${today}.db`;
     const destPath = `${FileSystem.cacheDirectory}${backupFileName}`;
 
     await FileSystem.copyAsync({
@@ -44,7 +44,7 @@ export const BackupService = {
 
     await Sharing.shareAsync(destPath, {
       mimeType: 'application/x-sqlite3',
-      dialogTitle: 'Export Darsgah Database Backup',
+      dialogTitle: 'Export Darsgah Tracker Database Backup',
       UTI: 'public.database',
     });
 
@@ -79,7 +79,7 @@ export const BackupService = {
     };
 
     const today = getTodayDateString();
-    const fileName = `darsgah_data_export_${today}.json`;
+    const fileName = `darsgah_tracker_data_export_${today}.json`;
     const filePath = `${FileSystem.cacheDirectory}${fileName}`;
 
     await FileSystem.writeAsStringAsync(filePath, JSON.stringify(exportData, null, 2));
@@ -91,7 +91,7 @@ export const BackupService = {
 
     await Sharing.shareAsync(filePath, {
       mimeType: 'application/json',
-      dialogTitle: 'Export Darsgah Data (JSON)',
+      dialogTitle: 'Export Darsgah Tracker Data (JSON)',
       UTI: 'public.json',
     });
 
@@ -101,7 +101,7 @@ export const BackupService = {
   /**
    * Prompts the user to pick a SQLite .db backup file and restores it.
    *
-   * The picked file is validated (SQLite header, integrity check, Darsgah tables) as a
+   * The picked file is validated (SQLite header, integrity check, Darsgah Tracker tables) as a
    * separate database before anything is touched. The current database is then closed,
    * kept as a rollback copy, and replaced together with its WAL side files.
    */
@@ -125,7 +125,7 @@ export const BackupService = {
     });
     if (header !== SQLITE_HEADER_BASE64) {
       throw new Error(
-        'This file is not a Darsgah database backup (.db). JSON exports cannot be restored.'
+        'This file is not a Darsgah Tracker database backup (.db). JSON exports cannot be restored.'
       );
     }
 
@@ -156,7 +156,7 @@ export const BackupService = {
         );
         const names = new Set(tables.map((t) => t.name));
         if (!REQUIRED_TABLES.every((t) => names.has(t))) {
-          throw new Error('This database is not a Darsgah backup.');
+          throw new Error('This database is not a Darsgah Tracker backup.');
         }
         // Fold any WAL content into the main file so a plain file move is complete
         await candidate.execAsync('PRAGMA wal_checkpoint(TRUNCATE);');
@@ -199,7 +199,7 @@ export const BackupService = {
 
 const SQLITE_HEADER_BASE64 = 'U1FMaXRlIGZvcm1hdCAzAA=='; // "SQLite format 3\0"
 const RESTORE_CANDIDATE_NAME = 'restore_candidate.db';
-// Present in every Darsgah backup version; newer tables are created by migrations on reopen
+// Present in every Darsgah Tracker backup version; newer tables are created by migrations on reopen
 const REQUIRED_TABLES = ['students', 'groups', 'attendance_records', 'schema_migrations'];
 
 /** Deletes a database file together with its -wal / -shm / -journal side files. */

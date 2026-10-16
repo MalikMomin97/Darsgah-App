@@ -2,7 +2,9 @@
 
 # Darsgah
 
-Offline maktab (madrasa) management app: students, groups, daily attendance, curriculum
+**Darsgah Tracker** (app name everywhere in the UI; slug, package `com.darsgah.app` and the DB file
+`darsgah_master.db` keep the old name so installs update in place). The word "darsgah" in
+"Darsgah Off" etc. means the school itself and stays) — offline maktab (madrasa) management app: students, groups, daily attendance, curriculum
 (books → chapters), daily sabak ratings and monthly reports. Expo SDK 57, Expo Router,
 expo-sqlite. All data is local on the device; there is no backend.
 
@@ -87,6 +89,8 @@ Current versions:
    surahs in Arabic (5 re-runs 4 for devices that got English names; it is idempotent)
 6. `holidays` table; attendance statuses reduced to present/absent (late→present,
    excused→absent)
+7. Renames the seeded `institution_name` "Darsgah Islamic Institute" → "Darsgah Tracker"
+   (only if the user never changed it)
 
 ## Domain rules
 

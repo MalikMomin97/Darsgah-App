@@ -42,7 +42,7 @@ export const DashboardScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
-  const [institutionName, setInstitutionName] = useState('Darsgah');
+  const [institutionName, setInstitutionName] = useState('Darsgah Tracker');
   const [academicSession, setAcademicSession] = useState('2026-2027');
   const [groupsStatus, setGroupsStatus] = useState<GroupStatusItem[]>([]);
   const [stats, setStats] = useState({
@@ -59,7 +59,7 @@ export const DashboardScreen: React.FC = () => {
     try {
       setLoading(true);
       const [instName, session] = await Promise.all([
-        SettingsService.getSetting('institution_name', 'Darsgah Islamic Institute'),
+        SettingsService.getSetting('institution_name', 'Darsgah Tracker'),
         SettingsService.getSetting('academic_session', '2026-2027'),
       ]);
       setInstitutionName(instName);

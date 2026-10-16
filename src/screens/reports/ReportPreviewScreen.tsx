@@ -75,7 +75,7 @@ export const ReportPreviewScreen: React.FC = () => {
   const route = useAppRoute<'ReportPreview'>();
   const { type, targetId, monthYear } = route.params;
 
-  const [institutionName, setInstitutionName] = useState('Darsgah');
+  const [institutionName, setInstitutionName] = useState('Darsgah Tracker');
   const [studentReport, setStudentReport] = useState<StudentMonthlyReport | null>(null);
   const [groupReport, setGroupReport] = useState<GroupMonthlyReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,10 +83,7 @@ export const ReportPreviewScreen: React.FC = () => {
 
   const loadReport = useCallback(async () => {
     try {
-      const instName = await SettingsService.getSetting(
-        'institution_name',
-        'Darsgah Islamic Institute'
-      );
+      const instName = await SettingsService.getSetting('institution_name', 'Darsgah Tracker');
       setInstitutionName(instName);
 
       if (type === 'student') {

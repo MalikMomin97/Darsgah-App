@@ -61,7 +61,7 @@ export const AboutScreen: React.FC = () => {
         {/* App identity */}
         <FadeInView style={styles.hero}>
           <Image source={APP_ICON} style={styles.appIcon} accessibilityIgnoresInvertColors />
-          <Text style={styles.appName}>Darsgah</Text>
+          <Text style={styles.appName}>Darsgah Tracker</Text>
           <Text style={styles.tagline}>Madrasa management, made simple</Text>
           <View style={styles.versionPill}>
             <Text style={styles.versionText}>Version {version}</Text>
@@ -73,9 +73,9 @@ export const AboutScreen: React.FC = () => {
           <Text style={styles.groupLabel}>About the App</Text>
           <Card>
             <Text style={styles.body}>
-              Darsgah helps teachers of a maktab or madrasa run their classes: students, groups,
-              daily attendance, the Qaida → Quran → Hifz curriculum, daily sabak and monthly reports
-              for parents, all from one phone.
+              Darsgah Tracker helps teachers of a maktab or madrasa run their classes: students,
+              groups, daily attendance, the Qaida → Quran → Hifz curriculum, daily sabak and monthly
+              reports for parents, all from one phone.
             </Text>
           </Card>
         </FadeInView>

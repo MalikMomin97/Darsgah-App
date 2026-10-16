@@ -33,10 +33,7 @@ export const SettingsScreen: React.FC = () => {
   useEffect(() => {
     let active = true;
     (async () => {
-      const inst = await SettingsService.getSetting(
-        'institution_name',
-        'Darsgah Islamic Institute'
-      );
+      const inst = await SettingsService.getSetting('institution_name', 'Darsgah Tracker');
       const session = await SettingsService.getSetting('academic_session', '2026-2027');
       if (!active) return;
       setInstitutionName(inst);
@@ -100,7 +97,7 @@ export const SettingsScreen: React.FC = () => {
             </View>
             <View style={styles.profileText}>
               <Text style={styles.profileName} numberOfLines={2}>
-                {institutionName.trim() || 'Your Darsgah'}
+                {institutionName.trim() || 'Darsgah Tracker'}
               </Text>
               {academicSession.trim() ? (
                 <Text style={styles.profileSession}>Session {academicSession.trim()}</Text>
@@ -187,7 +184,9 @@ export const SettingsScreen: React.FC = () => {
               />
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>About Us</Text>
-                <Text style={styles.rowDesc}>About Darsgah, its features and the developers.</Text>
+                <Text style={styles.rowDesc}>
+                  About Darsgah Tracker, its features and the developers.
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
             </PressableScale>

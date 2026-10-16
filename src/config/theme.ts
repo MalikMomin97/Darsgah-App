@@ -1,5 +1,5 @@
 /**
- * Darsgah design system — "Emerald & Gold".
+ * Darsgah Tracker design system — "Emerald & Gold".
  * Deep emerald brand colour, warm gold accent, ivory canvas, ink text.
  * Fonts are loaded in src/app/_layout.tsx; always style text through `Typography` or
  * `Fonts` (never `fontWeight`: each weight is its own font family on Android).

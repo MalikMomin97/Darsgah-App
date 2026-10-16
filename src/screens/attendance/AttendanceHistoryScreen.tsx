@@ -173,7 +173,7 @@ export const AttendanceHistoryScreen: React.FC = () => {
               <Text style={styles.dateText}>{formatDateDisplay(item.date)}</Text>
               <View style={styles.groupRow}>
                 <Ionicons name="people-outline" size={12} color={Colors.textMuted} />
-                <Text style={styles.groupText}>{item.groupName || 'Darsgah'}</Text>
+                <Text style={styles.groupText}>{item.groupName || 'Darsgah Tracker'}</Text>
               </View>
             </View>
 

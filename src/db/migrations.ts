@@ -264,18 +264,18 @@ export const migrations: Migration[] = [
 
       // 10. Default settings
       const now = new Date().toISOString();
-      await db.runAsync(
-        `INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?);`,
-        ['institution_name', 'Darsgah Islamic Institute']
-      );
-      await db.runAsync(
-        `INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?);`,
-        ['academic_session', '2026-2027']
-      );
-      await db.runAsync(
-        `INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?);`,
-        ['initialized_at', now]
-      );
+      await db.runAsync(`INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?);`, [
+        'institution_name',
+        'Darsgah Islamic Institute',
+      ]);
+      await db.runAsync(`INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?);`, [
+        'academic_session',
+        '2026-2027',
+      ]);
+      await db.runAsync(`INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?);`, [
+        'initialized_at',
+        now,
+      ]);
     },
   },
   {
@@ -517,6 +517,18 @@ export const migrations: Migration[] = [
         UPDATE attendance_records SET status = 'present' WHERE status = 'late';
         UPDATE attendance_records SET status = 'absent' WHERE status = 'excused';
       `);
+    },
+  },
+  {
+    version: 7,
+    name: 'rename_default_institution_v7',
+    up: async (db: SQLiteDatabase) => {
+      // App renamed to "Darsgah Tracker": update the seeded institution name, but only if the
+      // user never changed it.
+      await db.runAsync(
+        `UPDATE app_settings SET value = ? WHERE key = 'institution_name' AND value = ?;`,
+        ['Darsgah Tracker', 'Darsgah Islamic Institute']
+      );
     },
   },
 ];
